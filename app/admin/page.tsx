@@ -38,7 +38,7 @@ export default function AdminPage() {
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'jobs' },
-                (payload) => {
+                (payload: any) => {
                     setJobs(prev => {
                         const updated = [payload.new as any, ...prev].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
                         return updated.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 50)
@@ -114,8 +114,8 @@ export default function AdminPage() {
                                     <tr key={j.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50">
                                         <td className="py-2">
                                             <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wide ${j.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                    j.status === 'failed' ? 'bg-red-100 text-red-700' :
-                                                        j.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                                                j.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                                    j.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>
                                                 {j.status}
                                             </span>

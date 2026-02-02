@@ -522,7 +522,7 @@ function SceneContent() {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'jobs' },
-        (payload) => {
+        (payload: any) => {
           const updatedJob = payload.new as any
           if (updatedJob.status === 'completed' || updatedJob.status === 'failed' || updatedJob.status === 'retrying') {
             updateSlotByJobId(updatedJob.id, {
