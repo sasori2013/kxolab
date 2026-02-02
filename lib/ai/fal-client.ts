@@ -27,10 +27,15 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             const resp = await fetch(imageUrlInput)
             if (!resp.ok) throw new Error(`Failed to fetch input image: ${resp.status}`)
             const buf = await resp.arrayBuffer()
+            const inputBuffer = Buffer.from(buf)
+
+            // Fix: Convert HEIC to JPEG before sharp processing
+            const { ensureJpeg } = await import("./image-helper")
+            const jpegBuffer = await ensureJpeg(inputBuffer)
 
             // Resize to 2K (max 2048px on long edge)
             const sharp = (await import("sharp")).default
-            const image = sharp(Buffer.from(buf))
+            const image = sharp(jpegBuffer)
             const meta = await image.metadata()
 
             // Calculate Aspect Ratio for Nano Banana Pro

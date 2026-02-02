@@ -27,31 +27,29 @@ export async function GET(req: Request) {
         const arrayBuffer = await response.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
 
+        // 2. Process image (convert HEIC if needed, then resize)
         let outputBuffer: Buffer
+        const { isHeic } = await import("@/lib/ai/image-helper")
 
-        // 2. Check if it needs HEIC conversion
-        // We assume it's HEIC if the URL ends in .heic OR content-type is heic
-        // But simplest is to just try converting if the buffer signature matches or just allow logic based on request.
-        // For now, we'll blindly attempt conversion if filename indicates heic, or just assume input IS heic because this endpoint is for that.
+        let jpegBuffer: Buffer
+        if (isHeic(buffer)) {
+            console.log("Thumbnail generation: Converting HEIC...")
+            jpegBuffer = await convert({
+                buffer: buffer,
+                format: 'JPEG',
+                quality: 0.8
+            })
+        } else {
+            jpegBuffer = buffer
+        }
 
-        // Actually, let's look at the buffer/conversion.
-        // heic-convert expects HEIC buffer.
-
-        console.log("Thumbnail generation: Converting HEIC...")
-        const jpegBuffer = await convert({
-            buffer: buffer,
-            format: 'JPEG',
-            quality: 0.8
-        })
-
-        // 3. Resize with Sharp to create a thumbnail (save bandwidth/latency)
+        // 3. Resize with Sharp
         outputBuffer = await sharp(jpegBuffer)
             .resize(800, 800, { fit: "inside", withoutEnlargement: true })
             .toFormat("jpeg", { quality: 85 })
             .toBuffer()
 
-        // 4. Return the image with long cache headers
-        // Use standard Response for binary data to avoid Type issues with NextResponse and Buffer
+        // 4. Return the image
         return new Response(outputBuffer as any, {
             headers: {
                 "Content-Type": "image/jpeg",

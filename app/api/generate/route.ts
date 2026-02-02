@@ -213,7 +213,7 @@ export async function POST(req: Request) {
     const host = req.headers.get("host")
     const hostToUse = forwardedHost || host
 
-    const PRODUCTION_URL = "https://vive.kenxxxooo.com"
+    const PRODUCTION_URL = "https://kxolab.kenxxxooo.com"
     // Safety check: use current host in dev, APP_URL in prod
     const isLocalDev = process.env.NODE_ENV === "development"
     const baseUrl = (isLocalDev && host) ? `${protocol}://${hostToUse}` : (process.env.APP_URL || PRODUCTION_URL)
