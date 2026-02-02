@@ -1,0 +1,8 @@
+{
+    "crons": [
+        {
+            "path": "/api/cron/scavenger",
+            "schedule": "0 0 * * *"
+        }
+    ]
+}
