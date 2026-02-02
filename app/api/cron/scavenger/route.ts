@@ -63,7 +63,7 @@ async function handle(req: Request) {
             })
         }
 
-        const jobIds = stuckJobs.map(j => j.id)
+        const jobIds = stuckJobs.map((j: any) => j.id)
         console.log(`[Scavenger] Cleaning up ${jobIds.length} jobs: ${jobIds.join(", ")}`)
 
         const { count, error: updateError } = await adminClient
