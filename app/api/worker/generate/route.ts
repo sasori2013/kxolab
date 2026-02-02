@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase as adminClient } from "@/lib/supabase/admin"
-import { buildPromptDirectEnhancement } from "@/lib/ai/prompts-v2"
 import { nanoBananaGenerate } from "@/lib/ai/nanobanana"
 import { r2PutPng } from "@/lib/r2"
 import { supabase as anonClient } from "@/lib/supabase"
 
-// Vercel deployment limit (Pro is 300s)
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
@@ -16,25 +14,30 @@ export async function POST(req: NextRequest) {
     try {
         if (!jobId) throw new Error("Missing jobId")
 
-        const updateProgress = async (status: string, metadataUpdates: any = {}) => {
-            await adminClient
-                .from('jobs')
-                .update({
-                    status,
-                    updated_at: new Date().toISOString(),
-                    execution_metadata: { ...executionMetadata, ...metadataUpdates, steps: [...(executionMetadata.steps || []), { name: status, start: Date.now() }] }
-                })
-                .eq('id', jobId)
-        }
-
-        // Fetch current job for metadata
+        // Fetch current job for initial metadata
         const { data: job } = await adminClient
             .from('jobs')
             .select('*')
             .eq('id', jobId)
             .single()
 
-        const executionMetadata = job?.execution_metadata || {}
+        let currentMetadata = job?.execution_metadata || {}
+
+        const updateProgress = async (status: string, metadataUpdates: any = {}) => {
+            currentMetadata = {
+                ...currentMetadata,
+                ...metadataUpdates,
+                steps: [...(currentMetadata.steps || []), { name: status, start: Date.now() }]
+            }
+            await adminClient
+                .from('jobs')
+                .update({
+                    status,
+                    updated_at: new Date().toISOString(),
+                    execution_metadata: currentMetadata
+                })
+                .eq('id', jobId)
+        }
 
         // --- ENHANCEMENT ---
         await updateProgress("generating")
@@ -48,9 +51,7 @@ export async function POST(req: NextRequest) {
             aspectRatio: body.body?.aspectRatio || '1:1'
         })
 
-        if (!enhancementRes.ok) {
-            throw new Error(`Generation failed: ${enhancementRes.error}`)
-        }
+        if (!enhancementRes.ok) throw new Error(`Generation failed: ${enhancementRes.error}`)
 
         // --- FINAL SAVE ---
         await updateProgress("saving")
@@ -61,7 +62,6 @@ export async function POST(req: NextRequest) {
         if (!pub) throw new Error("NEXT_PUBLIC_R2_PUBLIC_BASE is missing")
         const resultUrl = `${pub}/${key}`
 
-        // Fetch and save the result (nanoBananaGenerate might return images as base64 or URL)
         if (enhancementRes.imageBase64) {
             const bytes = Buffer.from(enhancementRes.imageBase64, 'base64')
             const uploadPromise = r2PutPng(key, bytes)
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Finalize using anonClient
-        executionMetadata.duration = Date.now() - startTime
+        currentMetadata.duration = Date.now() - startTime
 
         console.log(`[Worker Job ${jobId}] Finalizing job...`)
         const { error: finalErr } = await anonClient.from('jobs').update({
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
             finished_at: new Date().toISOString(),
             error: null,
             error_code: null,
-            execution_metadata: { ...executionMetadata, completed: true }
+            execution_metadata: { ...currentMetadata, completed: true }
         }).eq('id', jobId)
 
         if (finalErr) throw new Error(`Final Update Error: ${finalErr.message}`)
@@ -110,12 +110,6 @@ export async function POST(req: NextRequest) {
 
     } catch (e: any) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
-
-        if (e.message === "RATE_LIMIT_EXCEEDED") {
-            return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 })
-        }
-
-        // Final error update
         await adminClient
             .from('jobs')
             .update({
@@ -125,7 +119,6 @@ export async function POST(req: NextRequest) {
                 finished_at: new Date().toISOString()
             })
             .eq('id', jobId)
-
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
     }
 }

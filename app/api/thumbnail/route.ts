@@ -1,5 +1,6 @@
 
 import { NextResponse } from "next/server"
+// @ts-ignore
 import convert from "heic-convert"
 import sharp from "sharp"
 

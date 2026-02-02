@@ -569,6 +569,7 @@ function SceneContent() {
       try {
         console.log("Converting HEIC on client...", args.file.name)
         // Robust import handling for heic2any
+        // @ts-ignore
         const heicModule = await import("heic2any")
         const heic2any = heicModule.default || (heicModule as any)
 

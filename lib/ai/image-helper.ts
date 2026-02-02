@@ -1,4 +1,5 @@
 import "server-only"
+// @ts-ignore
 import convert from "heic-convert"
 
 /**
