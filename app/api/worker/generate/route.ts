@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
         const enhancementRes = await nanoBananaGenerate({
             imageUrl,
             prompt: enhancementPrompt,
+            strength: body.body?.strength ?? 0.45,
+            rewrite: body.body?.rewrite ?? 1,
             resolution: body.body?.resolution || '2K',
             aspectRatio: body.body?.aspectRatio || '1:1'
         })
