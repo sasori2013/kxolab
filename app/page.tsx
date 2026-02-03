@@ -426,6 +426,12 @@ function SceneContent() {
       }
     }))
 
+    // Global state sync
+    if (patch.status === "done" || patch.status === "error") {
+      setIsGenerating(false)
+      setProgressText("")
+    }
+
     // Add to history if completed
     if (patch.status === "done" && patch.url) {
       console.log(`[UI History] Adding Job ${jobId} to production history.`, patch.url)

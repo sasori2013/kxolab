@@ -94,30 +94,29 @@ export async function POST(req: NextRequest) {
             throw new Error("No image data found in generation result")
         }
 
-        // --- GOOGLE DRIVE BACKUP (Optional Background Task) ---
+        // --- GOOGLE DRIVE BACKUP (Non-blocking Background Task) ---
         const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
         if (driveFolderId) {
-            console.log(`[Worker Job ${jobId}] Triggering Google Drive backup...`)
-            // We fetch the buffer again or reuse it to upload to Drive
-            // For simplicity, we can fetch it once if we need both, but let's re-fetch or use logic
-            try {
-                const imgRes = await fetch(resultUrl)
-                if (imgRes.ok) {
-                    const buf = await imgRes.arrayBuffer()
-                    const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
-                    uploadToGoogleDrive({
-                        buffer: Buffer.from(buf),
-                        filename: driveFilename,
-                        mimeType: 'image/png',
-                        folderId: driveFolderId
-                    }).then(res => {
-                        if (res.ok) console.log(`[Worker Job ${jobId}] Google Drive backup complete: ${res.fileId}`)
-                        else console.warn(`[Worker Job ${jobId}] Google Drive backup failed: ${res.error}`)
-                    })
+            console.log(`[Worker Job ${jobId}] Triggering Google Drive backup (background)...`);
+            (async () => {
+                try {
+                    const imgRes = await fetch(resultUrl)
+                    if (imgRes.ok) {
+                        const buf = await imgRes.arrayBuffer()
+                        const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+                        const driveRes = await uploadToGoogleDrive({
+                            buffer: Buffer.from(buf),
+                            filename: driveFilename,
+                            mimeType: 'image/png',
+                            folderId: driveFolderId
+                        })
+                        if (driveRes.ok) console.log(`[Worker Job ${jobId}] Google Drive backup complete: ${driveRes.fileId}`)
+                        else console.warn(`[Worker Job ${jobId}] Google Drive backup failed: ${driveRes.error}`)
+                    }
+                } catch (driveErr: any) {
+                    console.warn(`[Worker Job ${jobId}] Google Drive backup task failed:`, driveErr.message)
                 }
-            } catch (driveErr: any) {
-                console.warn(`[Worker Job ${jobId}] Google Drive pre-upload fetch failed:`, driveErr.message)
-            }
+            })()
         }
 
         // Finalize using anonClient
