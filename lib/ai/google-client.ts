@@ -72,8 +72,11 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     const is4K = args.resolution === "4K"
     const MAX_DIM = is4K ? 3840 : 1536 // 4K or current default
     const imgSharp = baseSharp.resize(MAX_DIM, MAX_DIM, { fit: "inside", withoutEnlargement: true })
-    const imgBufPng = await imgSharp.png().toBuffer()
-    const imgB64 = imgBufPng.toString("base64")
+    // Use JPEG for Vertex AI payload to reduce size (PNG can be too large for 4K)
+    const imgBufJpeg = await imgSharp.jpeg({ quality: 90 }).toBuffer()
+    const imgB64 = imgBufJpeg.toString("base64")
+
+    console.log(`[Vertex AI] Input image prepared. Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
 
     // 2. Fetch Reference Images (Gemini only)
     const referenceImageParts: any[] = []
@@ -85,10 +88,10 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
                 const res = await fetch(refUrl, { cache: "no-store" })
                 if (res.ok) {
                     const buf = await res.arrayBuffer()
-                    const optimized = await sharp(Buffer.from(buf)).resize(1024, 1024, { fit: "inside" }).png().toBuffer()
+                    const optimized = await sharp(Buffer.from(buf)).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer()
                     referenceImageParts.push({
                         inlineData: {
-                            mimeType: "image/png",
+                            mimeType: "image/jpeg",
                             data: optimized.toString("base64")
                         }
                     })
@@ -162,7 +165,7 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             { text: "IMAGE 1 (MAIN SCENE):" },
             {
                 inlineData: {
-                    mimeType: "image/png",
+                    mimeType: "image/jpeg",
                     data: imgB64,
                 },
             }
