@@ -948,258 +948,184 @@ function SceneContent() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-[#00e08a]/30">
 
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-16 space-y-12 md:space-y-24">
-
-        {/* TOP SECTION: Comparison View */}
-        <section className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8 items-start">
-
-            {/* INPUT SIDE */}
-            <div className="relative group aspect-[4/3] sm:aspect-video lg:aspect-square bg-neutral-900 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-              {activePhoto ? (
-                <>
-                  <img
-                    src={activePhoto.preview}
-                    alt="Original"
-                    className="w-full h-full object-contain p-2"
-                  />
-                  <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1.5 text-[10px] font-bold tracking-[0.2em] bg-black/60 backdrop-blur-xl border border-white/10 rounded-full uppercase">Input</span>
-                  </div>
-                  <button
-                    onClick={() => handleDeletePhoto(activePhoto.id)}
-                    className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center text-white border border-white/20 transition-all active:scale-90 group-hover:opacity-100 md:opacity-0"
-                  >
-                    ×
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  className="w-full h-full flex flex-col items-center justify-center gap-4 hover:bg-white/[0.02] transition-colors group"
-                >
-                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform">
-                    <span className="text-3xl font-light text-neutral-400">+</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-light tracking-widest text-neutral-400 uppercase">Upload Interior Photo</p>
-                    <p className="text-[10px] text-neutral-600 mt-2 uppercase tracking-tighter">JPEG, PNG, HEIC up to 20MB</p>
-                  </div>
-                </button>
-              )}
-            </div>
-
-            {/* OUTPUT SIDE */}
-            <div className="relative aspect-[4/3] sm:aspect-video lg:aspect-square bg-neutral-900 rounded-3xl overflow-hidden border border-white/5 shadow-2xl flex items-center justify-center">
-              {latestResult?.url ? (
-                <>
-                  <img
-                    src={latestResult.url}
-                    alt="Latest Output"
-                    className="w-full h-full object-contain p-2 animate-in zoom-in-95 duration-700"
-                  />
-                  <div className="absolute top-4 left-4 flex gap-2">
-                    <span className="px-3 py-1.5 text-[10px] font-bold tracking-[0.2em] bg-[#00e08a]/20 text-[#00e08a] backdrop-blur-xl border border-[#00e08a]/20 rounded-full uppercase">Output</span>
-                    {!isGenerating && !anyGenerating && (
-                      <button
-                        onClick={resetLatest}
-                        className="px-3 py-1.5 text-[10px] font-bold tracking-[0.2em] bg-black/40 hover:bg-black/60 text-neutral-400 hover:text-white backdrop-blur-xl border border-white/10 rounded-full uppercase transition-all active:scale-95"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDownload(latestResult.url!)}
-                    className="absolute bottom-4 right-4 w-12 h-12 bg-white/10 hover:bg-white text-neutral-900 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 group-hover:opacity-100"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                  </button>
-                </>
-              ) : isGenerating || anyGenerating ? (
-                <div className="flex flex-col items-center gap-6 text-center px-12 animate-pulse">
-                  <div className="w-12 h-12 border-2 border-[#00e08a]/30 border-t-[#00e08a] rounded-full animate-spin" />
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold tracking-[0.3em] uppercase text-[#00e08a]">Generating</p>
-                    <p className="text-[11px] text-neutral-500 font-light italic">
-                      {latestResult?.currentStep === "analyzing" && "Analyzing geometry..."}
-                      {latestResult?.currentStep === "generating" && "Synthesizing enhancement..."}
-                      {latestResult?.currentStep === "saving" && "Developing final image..."}
-                      {!latestResult?.currentStep && "Initializing AI..."}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center space-y-2 opacity-20">
-                  <p className="text-[10px] font-bold tracking-[0.4em] uppercase">Result Pending</p>
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* REFERENCE INSPIRATION SHELF */}
-          <div className="mt-8 md:mt-12 space-y-6 pt-8 border-t border-white/5">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 mb-2">
-              <div className="text-center space-y-1">
-                <label className="block text-[10px] font-bold tracking-[0.4em] text-neutral-600 uppercase">Reference Inspiration</label>
-                <p className="text-[9px] text-neutral-700 font-light tracking-widest uppercase">Stylistic & Structural Guidance</p>
-              </div>
-              {photos.length > 1 && !isGenerating && !anyGenerating && (
-                <button
-                  onClick={resetReferences}
-                  className="px-3 py-1 text-[9px] font-bold tracking-[0.2em] text-neutral-500 hover:text-neutral-300 border border-white/5 hover:border-white/10 rounded-full uppercase transition-all bg-white/[0.02]"
-                >
-                  Reset Refs
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-4">
-              {photos.slice(1).map((photo) => (
-                <div key={photo.id} className="relative w-24 h-24 sm:w-32 sm:h-32 bg-neutral-900 rounded-2xl overflow-hidden border border-white/5 shadow-xl group animate-in zoom-in-95 duration-500">
-                  <img src={photo.preview} alt="Reference" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  <button
-                    onClick={() => handleDeletePhoto(photo.id)}
-                    className="absolute top-2 right-2 w-7 h-7 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/10 opacity-0 group-hover:opacity-100 transition-all active:scale-95"
-                    aria-label="Remove reference"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-
-              {photos.length > 0 && photos.length < MAX_UPLOADS && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all gap-2 group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
-                    <span className="text-lg font-light text-neutral-500">+</span>
-                  </div>
-                  <span className="text-[8px] text-neutral-500 font-bold uppercase tracking-[0.2em]">Add Ref</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* CONTROLS OVERLAY (CENTRALIZED) */}
-          <div className="mt-8 md:mt-12 max-w-4xl mx-auto space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-              <div className="md:col-span-12">
-                <label className="block text-[10px] font-bold tracking-[0.2em] text-neutral-500 uppercase mb-3 px-1">Concept Prompt</label>
-                <textarea
-                  value={customPrompt}
-                  onChange={(e) => setCustomPrompt(e.target.value)}
-                  placeholder="e.g. Minimalist japandi bedroom with natural oak wood, warm ambient lighting, and neutral linen textures..."
-                  className="w-full h-24 p-5 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#00e08a]/40 focus:ring-1 focus:ring-[#00e08a]/20 transition-all resize-none shadow-inner"
+      <main className="relative min-h-screen flex flex-col">
+        {/* BACKGROUND LAYER: Immersive History Gallery */}
+        <div className="fixed inset-0 z-0 overflow-y-auto pt-4 pb-40 px-4 scroll-smooth no-scrollbar select-none pointer-events-none">
+          <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 opacity-40">
+            {galleryResults.map((res, i) => (
+              <div
+                key={res.id}
+                className="relative aspect-[4/5] rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02] hover:opacity-100"
+                onClick={() => {
+                  // Optional: feature to promote history item to main view
+                }}
+              >
+                <img
+                  src={res.url!}
+                  alt={`History ${i}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))}
+
+            {/* Placeholder Empty Grid if no history */}
+            {galleryResults.length === 0 && (
+              Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="aspect-[4/5] rounded-xl bg-white/[0.02] border border-white/[0.03]" />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* FLOATING ACTION LAYER: The Control Bar */}
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl">
+          <div className="glass-dark rounded-[32px] p-2 flex flex-col md:flex-row items-center gap-2 shadow-2xl ring-1 ring-white/10">
+
+            {/* LEFT: Image Picker & Main Thumb */}
+            <div className="flex items-center gap-2 p-1">
+              <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border border-white/10 group">
+                {activePhoto?.preview ? (
+                  <>
+                    <img src={activePhoto.preview} className="w-full h-full object-cover" alt="Input" />
+                    <button
+                      onClick={() => handleDeletePhoto(activePhoto.id)}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                    >
+                      <span className="text-xl">×</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
+                  >
+                    <span className="text-2xl font-light">+</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Inspiration Slots (Small) */}
+              <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
+                {photos.slice(1).map((photo) => (
+                  <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
+                    <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
+                    <button
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {photos.length > 0 && photos.length < MAX_UPLOADS && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-10 h-10 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-neutral-600 hover:text-neutral-400 hover:border-white/20 transition-all"
+                  >
+                    <span className="text-sm">+</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-8 items-center">
-              <div className="sm:col-span-4 space-y-3">
-                <label className="block text-[10px] font-bold tracking-[0.2em] text-neutral-500 uppercase px-1">Format</label>
-                <div className="flex bg-neutral-900/50 p-1 rounded-xl border border-white/5">
-                  {["2K", "4K"].map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setResolution(r as any)}
-                      className={`flex-1 py-1.5 text-[10px] font-bold tracking-widest rounded-lg transition-all ${resolution === r ? "bg-white/10 text-[#00e08a]" : "text-neutral-500 hover:text-neutral-300"}`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="sm:col-span-8 space-y-3">
-                <label className="block text-[10px] font-bold tracking-[0.2em] text-neutral-500 uppercase px-1">Ratio</label>
-                <div className="flex flex-wrap gap-1 bg-neutral-900/50 p-1 rounded-xl border border-white/5">
-                  {["original", "1:1", "3:4", "4:3", "16:9"].map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setAspectRatio(r)}
-                      className={`flex-1 min-w-[60px] py-1.5 text-[9px] font-bold tracking-widest rounded-lg transition-all uppercase ${aspectRatio === r ? "bg-white/10 text-[#00e08a]" : "text-neutral-500 hover:text-neutral-300"}`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {/* CENTER: Prompt Input */}
+            <div className="flex-1 w-full px-2">
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="Describe your architectural vision..."
+                className="w-full h-12 py-3 px-1 text-sm bg-transparent border-none focus:ring-0 placeholder-neutral-600 resize-none font-light leading-relaxed scrollbar-none"
+              />
             </div>
 
-            <div className="pt-4">
+            {/* RIGHT: Settings & Generate */}
+            <div className="flex items-center gap-2 p-1">
+              {/* Setting Chips (Scrollable on small screens) */}
+              <div className="flex items-center gap-1.5 px-2 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/5 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" />
+                  <span className="text-[10px] font-bold tracking-tight text-neutral-300">Nano Banana Pro</span>
+                </div>
+
+                <button
+                  onClick={() => setResolution(resolution === "2K" ? "4K" : "2K")}
+                  className="px-3 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400"
+                >
+                  {resolution}
+                </button>
+
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] font-bold text-neutral-400">
+                  1/4
+                </div>
+
+                <button className="px-3 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400">
+                  Draw
+                </button>
+              </div>
+
+              {/* GENERATE BUTTON */}
               <button
                 onClick={generateForAll}
                 disabled={isGenerating || anyGenerating || anyUploading || !activePhoto?.imageUrl}
-                className="w-full h-20 text-[11px] font-bold tracking-[0.4em] bg-[#00e08a] text-neutral-950 hover:bg-[#00f79b] disabled:opacity-20 disabled:grayscale transition-all rounded-2xl shadow-[0_0_40px_rgba(0,224,138,0.15)] active:scale-[0.98] uppercase group"
+                className="h-14 px-8 bg-[#d4ff00] text-black rounded-3xl font-bold text-xs tracking-tight hover:bg-[#e6ff66] disabled:opacity-20 disabled:grayscale transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_30px_rgba(212,255,0,0.2)]"
               >
                 {isGenerating || anyGenerating ? (
-                  <span className="flex items-center justify-center gap-3">
-                    <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce" />
-                  </span>
+                    <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:0.4s]" />
+                  </div>
                 ) : (
-                  "Initiate Enhancement"
+                  <>
+                    <span>Generate</span>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z" />
+                    </svg>
+                    <span className="opacity-40 text-[10px]">2</span>
+                  </>
                 )}
               </button>
-
-              {error && (
-                <p className="mt-4 text-center text-[10px] text-red-500/80 font-medium tracking-widest uppercase animate-in fade-in slide-in-from-top-1">
-                  {error}
-                </p>
-              )}
             </div>
           </div>
-        </section>
 
-        {/* BOTTOM SECTION: Full-Ratio Gallery */}
-        {galleryResults.length > 0 && (
-          <section className="space-y-12 animate-in fade-in duration-1000">
-            <div className="flex items-center justify-between border-b border-white/5 pb-6">
-              <h2 className="text-[12px] font-bold tracking-[0.5em] text-neutral-500 uppercase">Production History</h2>
-              <p className="text-[10px] text-neutral-600 font-light italic">{galleryResults.length} Generative Iterations</p>
+          {/* Status/Error Toast Overlay */}
+          {(error || isGenerating || anyGenerating) && (
+            <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-fit px-6 py-2 glass rounded-full flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
+              {error ? (
+                <span className="text-[10px] font-bold text-red-500 tracking-wider uppercase">{error}</span>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-[#d4ff00] rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold text-neutral-400 tracking-[0.2em] uppercase">
+                    {latestResult?.currentStep || "Processing..."}
+                  </span>
+                </>
+              )}
             </div>
+          )}
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
-              {galleryResults.map((res, i) => (
-                <div key={res.id} className="group flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: `${i * 100}ms` }}>
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-mono text-neutral-800">#{galleryResults.length - i}</span>
-                      <span className="text-[8px] font-bold text-neutral-600 uppercase tracking-widest">
-                        {res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => res.url && handleDownload(res.url)}
-                      className="w-7 h-7 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center transition-all active:scale-90"
-                      title="Download"
-                    >
-                      <svg className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                    </button>
-                  </div>
+        {/* TOP LAYER: Latest Result Overlay / Modal View */}
+        {latestResult && !hideLatestResult && (
+          <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-500">
+            <div className="relative w-full max-w-7xl aspect-[4/3] md:aspect-video rounded-3xl overflow-hidden bg-neutral-900 border border-white/10 shadow-3xl">
+              <ResultGallery
+                originalUrl={activePhoto?.imageUrl}
+                results={activePhoto?.results || []}
+                handleDownload={handleDownload}
+                filename={activePhoto?.file.name || "Scene"}
+              />
 
-                  <div className="relative aspect-square sm:aspect-auto sm:min-h-[240px] rounded-2xl overflow-hidden border border-white/5 bg-neutral-900/50 shadow-xl transition-all group-hover:border-[#00e08a]/20 group-hover:shadow-[#00e08a]/5">
-                    <img
-                      src={res.url!}
-                      alt={`Result ${i}`}
-                      className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-[1.02]"
-                    />
-                  </div>
-                </div>
-              ))}
+              <button
+                onClick={resetLatest}
+                className="absolute top-6 right-6 z-50 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/10 transition-all active:scale-95"
+              >
+                <span className="text-2xl">×</span>
+              </button>
             </div>
-          </section>
+          </div>
         )}
 
         {/* Hidden Inputs */}
