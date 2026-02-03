@@ -101,7 +101,6 @@ export async function POST(req: NextRequest) {
             prompt: enhancementPrompt,
             finished_at: new Date().toISOString(),
             error: null,
-            error_code: null,
             execution_metadata: { ...currentMetadata, completed: true }
         }).eq('id', jobId)
 
