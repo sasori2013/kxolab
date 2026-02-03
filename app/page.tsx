@@ -977,11 +977,11 @@ function SceneContent() {
       <main className="relative min-h-screen flex flex-col">
         {/* BACKGROUND LAYER: Immersive History Gallery */}
         <div className="fixed inset-0 z-0 overflow-y-auto pt-4 pb-40 px-4 scroll-smooth no-scrollbar select-none pointer-events-none">
-          <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 opacity-40">
+          <div className="max-w-7xl mx-auto columns-2 md:columns-3 lg:columns-4 gap-4 opacity-100">
             {galleryResults.map((res, i) => (
               <div
                 key={res.id}
-                className="relative aspect-[4/5] rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02] hover:opacity-100"
+                className="relative break-inside-avoid rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 mb-4 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02]"
                 onClick={() => {
                   // Optional: feature to promote history item to main view
                 }}
@@ -989,17 +989,17 @@ function SceneContent() {
                 <img
                   src={res.url!}
                   alt={`History ${i}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-auto"
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             ))}
 
-            {/* Placeholder Empty Grid if no history */}
+            {/* Placeholder if no history */}
             {galleryResults.length === 0 && (
               Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="aspect-[4/5] rounded-xl bg-white/[0.02] border border-white/[0.03]" />
+                <div key={i} className="aspect-square rounded-xl bg-white/[0.02] border border-white/[0.03] mb-4" />
               ))
             )}
           </div>
