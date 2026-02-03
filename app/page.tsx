@@ -326,6 +326,9 @@ function SceneContent() {
   // Hero (任意)
   const [showHello] = useState(true)
 
+  // Gallery Zoom
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState<string | null>(null)
+
   const searchParams = useSearchParams()
   const heroSlides = useMemo(
     () => [
@@ -982,9 +985,7 @@ function SceneContent() {
               <div
                 key={res.id}
                 className="relative break-inside-avoid rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 mb-4 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02]"
-                onClick={() => {
-                  // Optional: feature to promote history item to main view
-                }}
+                onClick={() => setSelectedGalleryImage(res.url)}
               >
                 <img
                   src={res.url!}
@@ -1144,6 +1145,28 @@ function SceneContent() {
           </div>
         )}
 
+        {/* Gallery Image Zoom Modal */}
+        {selectedGalleryImage && (
+          <div
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-300 cursor-zoom-out"
+            onClick={() => setSelectedGalleryImage(null)}
+          >
+            <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+              <img
+                src={selectedGalleryImage}
+                alt="Zoomed View"
+                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10"
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedGalleryImage(null); }}
+                className="absolute top-[-20px] right-[-20px] md:top-0 md:right-[-60px] w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Hidden Inputs */}
         <input
           ref={fileInputRef}
@@ -1153,27 +1176,7 @@ function SceneContent() {
           className="hidden"
         />
       </main>
-
-      <footer className="max-w-7xl mx-auto px-8 py-20 mt-24 border-t border-white/5">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="text-[10px] font-bold tracking-[0.5em] text-neutral-600 uppercase">kxolab.ai</div>
-          <p className="text-[10px] text-neutral-700 font-light tracking-widest uppercase text-center md:text-right">
-            Advanced Generative Architectural Synthesis © 2026
-          </p>
-        </div>
-
-        {/* Discrete Debug View (only visible if you know where to look or via URL) */}
-        {typeof window !== 'undefined' && window.location.search.includes('debug=true') && (
-          <div className="mt-8 p-4 bg-neutral-900/50 rounded-xl text-[8px] font-mono text-neutral-500 overflow-auto max-h-60 border border-white/5">
-            <p className="font-bold mb-2">DEBUG STATE:</p>
-            <p>Photos: {photos.length}</p>
-            <pre>{JSON.stringify(photos.map(p => ({ id: p.id, status: p.status, results: p.results.length })), null, 2)}</pre>
-            <p className="mt-2">History: {history.length}</p>
-            <pre>{JSON.stringify(history.map(h => ({ jobId: h.jobId, url: !!h.url, status: h.status })), null, 2)}</pre>
-          </div>
-        )}
-      </footer>
-    </div >
+    </div>
   )
 }
 
