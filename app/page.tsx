@@ -516,6 +516,27 @@ function SceneContent() {
 
 
   useEffect(() => {
+    async function fetchInitialHistory() {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (data) {
+        const historySlots: OutputSlot[] = data.map(job => ({
+          id: crypto.randomUUID().slice(0, 8),
+          jobId: job.id,
+          url: job.result_url,
+          status: 'done',
+          updatedAt: new Date(job.created_at).getTime()
+        }))
+        setHistory(historySlots)
+      }
+    }
+    fetchInitialHistory()
+
     const channel = supabase
       .channel('jobs-realtime')
       .on(
