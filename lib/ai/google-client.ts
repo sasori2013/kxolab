@@ -70,13 +70,16 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     }
 
     const is4K = args.resolution === "4K"
-    const MAX_DIM = is4K ? 3840 : 1536 // 4K or current default
-    const imgSharp = baseSharp.resize(MAX_DIM, MAX_DIM, { fit: "inside", withoutEnlargement: true })
-    // Use JPEG for Vertex AI payload to reduce size (PNG can be too large for 4K)
+    // CAPPING INPUT IMAGE: Even if output is 4K, input hint only needs ~1.5K. 
+    // Sending 4K as base64 input is too slow and likely to timeout.
+    const MAX_INPUT_DIM = 1536
+    const imgSharp = baseSharp.resize(MAX_INPUT_DIM, MAX_INPUT_DIM, { fit: "inside", withoutEnlargement: true })
+
+    // Use JPEG for Vertex AI payload to reduce size (PNG can be too large)
     const imgBufJpeg = await imgSharp.jpeg({ quality: 90 }).toBuffer()
     const imgB64 = imgBufJpeg.toString("base64")
 
-    console.log(`[Vertex AI] Input image prepared. Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
+    console.log(`[Vertex AI] Input image prepared. Dim: ${MAX_INPUT_DIM}, Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
 
     // 2. Fetch Reference Images (Gemini only)
     const referenceImageParts: any[] = []
@@ -195,6 +198,7 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 180000) // 180s timeout
 
+    const apiStartTime = Date.now()
     let res
     try {
         res = await fetch(endpoint, {
@@ -210,12 +214,17 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         clearTimeout(timeoutId)
     }
 
+    const apiDuration = Date.now() - apiStartTime
+    console.log(`[Vertex AI] API Call Finished. Status: ${res.status}, Duration: ${apiDuration}ms`)
+
     const text = await res.text()
+    console.log(`[Vertex AI] Response body received. Length: ${Math.round(text.length / 1024)}KB`)
+
     let json: any = null
     try {
         json = JSON.parse(text)
     } catch {
-        return { ok: false, error: `Vertex AI non-JSON response: ${res.status}`, raw: text }
+        return { ok: false, error: `Vertex AI non-JSON response: ${res.status}`, raw: text.slice(0, 1000) }
     }
 
     if (!res.ok) {
