@@ -201,7 +201,7 @@ function ResultGallery({
                     {res.type === "original" ? (
                       <>ORIGINAL <span className="text-white/60 mx-1">|</span> {filename}</>
                     ) : (
-                      res.label
+                      null
                     )}
                   </span>
                 </div>
@@ -221,7 +221,7 @@ function ResultGallery({
                 )}
 
                 {res.url ? (
-                  <img src={res.url} alt={res.label} className="w-full h-auto md:max-h-[70vh] min-h-[300px] object-contain bg-neutral-100" />
+                  <img src={res.url} alt={res.label} className="w-full h-auto md:max-h-[70vh] min-h-[300px] object-contain bg-black" />
                 ) : res.status === "generating" || res.status === "queued" || res.status === "retrying" ? (
                   <div className="h-80 md:h-[70vh] flex flex-col items-center justify-center text-sm text-neutral-400 animate-pulse bg-neutral-50 px-8 text-center italic">
                     <span className="tracking-widest uppercase text-[10px] mb-2 font-bold not-italic">
@@ -232,18 +232,17 @@ function ResultGallery({
                         Vertex AI busy. Waiting to retry...<br />
                         <span className="text-[10px] opacity-70">(Attempt #{res.retryCount || 1})</span>
                       </span>
-                    ) : res.currentStep ? (
-                      <span className="text-neutral-500 text-[12px] capitalize">
-                        {res.currentStep === "analyzing" && "Analyzing composition..."}
-                        {res.currentStep === "generating" && "Generating enhancement..."}
-                        {res.currentStep === "saving" && "Finalizing image..."}
-                      </span>
                     ) : (
-                      <span className="text-neutral-400 text-[12px]">Please wait a moment...</span>
+                      <div className="relative w-64 h-1 bg-white/10 rounded-full overflow-hidden mt-4">
+                        <div className="absolute inset-0 bg-[#d4ff00] w-1/2 animate-[slide_2s_infinite_linear]" />
+                      </div>
                     )}
+                    <span className="text-neutral-500 text-[10px] uppercase tracking-[0.2em] mt-8 font-bold">
+                      {res.currentStep || "Generating..."}
+                    </span>
                   </div>
                 ) : (
-                  <div className="h-80 flex items-center justify-center text-sm text-red-400 bg-neutral-50">
+                  <div className="h-80 flex items-center justify-center text-sm text-red-400 bg-neutral-900">
                     Generation failed
                   </div>
                 )}
@@ -1032,36 +1031,26 @@ function SceneContent() {
 
             {/* CENTER: Prompt Input */}
             <div className="flex-1 w-full px-2">
-              <textarea
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Describe your architectural vision..."
-                className="w-full h-12 py-3 px-1 text-sm bg-transparent border-none focus:ring-0 placeholder-neutral-600 resize-none font-light leading-relaxed scrollbar-none"
-              />
+              <div className="md:col-span-12">
+                <label className="block text-[10px] font-bold tracking-[0.2em] text-neutral-500 uppercase mb-3 px-1">Concept Prompt</label>
+                <textarea
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="e.g. Minimalist japandi bedroom with natural oak wood, warm ambient lighting, and neutral linen textures..."
+                  className="w-full h-24 p-5 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#d4ff00]/40 focus:ring-1 focus:ring-[#d4ff00]/20 transition-all resize-none shadow-inner"
+                />
+              </div>
             </div>
 
             {/* RIGHT: Settings & Generate */}
             <div className="flex items-center gap-2 p-1">
-              {/* Setting Chips (Scrollable on small screens) */}
+              {/* Setting Chips */}
               <div className="flex items-center gap-1.5 px-2 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/5 whitespace-nowrap">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" />
-                  <span className="text-[10px] font-bold tracking-tight text-neutral-300">Nano Banana Pro</span>
-                </div>
-
                 <button
                   onClick={() => setResolution(resolution === "2K" ? "4K" : "2K")}
-                  className="px-3 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400"
+                  className="px-4 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400 uppercase tracking-widest"
                 >
                   {resolution}
-                </button>
-
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] font-bold text-neutral-400">
-                  1/4
-                </div>
-
-                <button className="px-3 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400">
-                  Draw
                 </button>
               </div>
 
@@ -1157,7 +1146,7 @@ function SceneContent() {
           </div>
         )}
       </footer>
-    </div>
+    </div >
   )
 }
 

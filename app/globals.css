@@ -3,7 +3,8 @@
 :root {
   --background: #000000;
   --foreground: #ffffff;
-  --accent: #d4ff00; /* Nano Banana Lime */
+  --accent: #d4ff00;
+  /* Nano Banana Lime */
 }
 
 @theme inline {
@@ -38,13 +39,16 @@ body {
 ::-webkit-scrollbar {
   width: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
@@ -54,8 +58,12 @@ body {
   animation: float 6s ease-in-out infinite;
 }
 
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(200%);
+  }
 }
