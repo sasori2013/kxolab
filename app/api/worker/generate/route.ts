@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     const startTime = Date.now()
     const body = await req.json()
     const { jobId, sessionId, imageUrl } = body
+    let currentMetadata: any = {}
 
     try {
         if (!jobId) throw new Error("Missing jobId")
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
             .eq('id', jobId)
             .single()
 
-        let currentMetadata = job?.execution_metadata || {}
+        currentMetadata = job?.execution_metadata || {}
 
         const updateProgress = async (status: string, metadataUpdates: any = {}) => {
             currentMetadata = {
@@ -98,10 +99,13 @@ export async function POST(req: NextRequest) {
         const { error: finalErr } = await anonClient.from('jobs').update({
             status: 'completed',
             result_url: resultUrl,
-            prompt: enhancementPrompt,
-            finished_at: new Date().toISOString(),
             error: null,
-            execution_metadata: { ...currentMetadata, completed: true }
+            execution_metadata: {
+                ...currentMetadata,
+                completed: true,
+                prompt: enhancementPrompt,
+                finished_at: new Date().toISOString()
+            }
         }).eq('id', jobId)
 
         if (finalErr) throw new Error(`Final Update Error: ${finalErr.message}`)
@@ -117,7 +121,10 @@ export async function POST(req: NextRequest) {
                 status: 'error',
                 error: e.message,
                 updated_at: new Date().toISOString(),
-                finished_at: new Date().toISOString()
+                execution_metadata: {
+                    ...currentMetadata,
+                    error_at: new Date().toISOString()
+                }
             })
             .eq('id', jobId)
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
