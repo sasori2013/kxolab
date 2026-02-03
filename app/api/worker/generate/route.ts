@@ -3,6 +3,7 @@ import { supabase as adminClient } from "@/lib/supabase/admin"
 import { nanoBananaGenerate } from "@/lib/ai/nanobanana"
 import { r2PutPng } from "@/lib/r2"
 import { supabase as anonClient } from "@/lib/supabase"
+import { uploadToGoogleDrive } from "@/lib/ai/google-drive"
 
 export const maxDuration = 300
 
@@ -91,6 +92,32 @@ export async function POST(req: NextRequest) {
             }
         } else {
             throw new Error("No image data found in generation result")
+        }
+
+        // --- GOOGLE DRIVE BACKUP (Optional Background Task) ---
+        const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+        if (driveFolderId) {
+            console.log(`[Worker Job ${jobId}] Triggering Google Drive backup...`)
+            // We fetch the buffer again or reuse it to upload to Drive
+            // For simplicity, we can fetch it once if we need both, but let's re-fetch or use logic
+            try {
+                const imgRes = await fetch(resultUrl)
+                if (imgRes.ok) {
+                    const buf = await imgRes.arrayBuffer()
+                    const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+                    uploadToGoogleDrive({
+                        buffer: Buffer.from(buf),
+                        filename: driveFilename,
+                        mimeType: 'image/png',
+                        folderId: driveFolderId
+                    }).then(res => {
+                        if (res.ok) console.log(`[Worker Job ${jobId}] Google Drive backup complete: ${res.fileId}`)
+                        else console.warn(`[Worker Job ${jobId}] Google Drive backup failed: ${res.error}`)
+                    })
+                }
+            } catch (driveErr: any) {
+                console.warn(`[Worker Job ${jobId}] Google Drive pre-upload fetch failed:`, driveErr.message)
+            }
         }
 
         // Finalize using anonClient

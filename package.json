@@ -19,6 +19,7 @@
     "@upstash/qstash": "^2.8.4",
     "dotenv": "^17.2.3",
     "google-auth-library": "^10.5.0",
+    "googleapis": "^171.1.0",
     "heic-convert": "^2.1.0",
     "heic2any": "^0.0.4",
     "next": "16.0.10",
