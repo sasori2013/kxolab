@@ -157,20 +157,29 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         const isFood = category === "food"
         const isHighStrength = args.strength && args.strength > 0.7 && isArchitectural
 
+        const parts: any[] = [
+            { text: `TASK: Based on the "MAIN SCENE" (Image 1) and the "REFERENCE INSPIRATION" (Images 2+), fulfill this request: ${args.prompt.trim()}` },
+            { text: "IMAGE 1 (MAIN SCENE):" },
+            {
+                inlineData: {
+                    mimeType: "image/png",
+                    data: imgB64,
+                },
+            }
+        ]
+
+        if (referenceImageParts.length > 0) {
+            referenceImageParts.forEach((refPart, i) => {
+                parts.push({ text: `IMAGE ${i + 2} (REFERENCE INSPIRATION):` })
+                parts.push(refPart)
+            })
+        }
+
         payload = {
             contents: [
                 {
                     role: "user",
-                    parts: [
-                        { text: args.prompt.trim() },
-                        {
-                            inlineData: {
-                                mimeType: "image/png",
-                                data: imgB64,
-                            },
-                        },
-                        ...referenceImageParts,
-                    ],
+                    parts
                 },
             ],
             generationConfig: {

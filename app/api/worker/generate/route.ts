@@ -51,7 +51,8 @@ export async function POST(req: NextRequest) {
             strength: body.body?.strength ?? 0.45,
             rewrite: body.body?.rewrite ?? 1,
             resolution: body.body?.resolution || '2K',
-            aspectRatio: body.body?.aspectRatio || '1:1'
+            aspectRatio: body.body?.aspectRatio || '1:1',
+            referenceImageUrls: body.referenceImageUrls || []
         })
 
         if (!enhancementRes.ok) throw new Error(`Generation failed: ${enhancementRes.error}`)
