@@ -196,7 +196,8 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 180000) // 180s timeout
+    // Extended timeout to 300s (5 minutes) to match maxDuration
+    const timeoutId = setTimeout(() => controller.abort(), 300000)
 
     const apiStartTime = Date.now()
     let res
@@ -206,6 +207,8 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
+                // Custom debug header to help identify requests and potentially bypass some caches
+                "X-Debug-Job-Id": args.imageUrl.split('/').pop() || "unknown",
             },
             body: JSON.stringify(payload),
             signal: controller.signal
