@@ -315,6 +315,41 @@ function SceneContent() {
   const [resolution, setResolution] = useState<"2K" | "4K">("2K")
   const [aspectRatio, setAspectRatio] = useState("original")
 
+  // --- SESSION PERSISTENCE (Load) ---
+  useEffect(() => {
+    try {
+      const savedPrompt = localStorage.getItem("kxolab_prompt")
+      const savedRes = localStorage.getItem("kxolab_resolution")
+      const savedPhotos = localStorage.getItem("kxolab_photos")
+
+      if (savedPrompt) setCustomPrompt(savedPrompt)
+      if (savedRes === "2K" || savedRes === "4K") setResolution(savedRes)
+      if (savedPhotos) {
+        const parsed = JSON.parse(savedPhotos) as any[]
+        // Reconstruct UploadedPhoto objects (File object will be missing, but imageUrl remains)
+        const recovered = parsed.map(p => ({
+          ...p,
+          file: new File([], p.file?.name || "recovered.jpg", { type: p.file?.type || "image/jpeg" })
+        }))
+        setPhotos(recovered)
+      }
+    } catch (e) {
+      console.warn("Failed to load session from localStorage", e)
+    }
+  }, [])
+
+  // --- SESSION PERSISTENCE (Save) ---
+  useEffect(() => {
+    localStorage.setItem("kxolab_prompt", customPrompt)
+    localStorage.setItem("kxolab_resolution", resolution)
+    // Photos persistence (strip the actual File binary, keep metadata and URLs)
+    const photosToSave = photos.map(({ file, ...rest }) => ({
+      ...rest,
+      file: { name: file.name, type: file.type }
+    }))
+    localStorage.setItem("kxolab_photos", JSON.stringify(photosToSave))
+  }, [customPrompt, resolution, photos])
+
 
   // Auto-scroll to top when entering workspace mode (first upload)
   useEffect(() => {
