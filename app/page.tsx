@@ -7,8 +7,8 @@ import { supabase } from "@/lib/supabase"
 import { useSearchParams } from "next/navigation"
 
 // Multi-slot implementation
-type SlotStatus = "idle" | "queued" | "generating" | "done" | "error" | "retrying"
-type PhotoStatus = "ready" | "uploading" | "uploaded" | "error" | "generating" | "done"
+type SlotStatus = "idle" | "queued" | "generating" | "done" | "error" | "failed" | "retrying"
+type PhotoStatus = "ready" | "uploading" | "uploaded" | "error" | "failed" | "generating" | "done"
 
 interface OutputSlot {
   id: string // Unique ID for key
@@ -242,8 +242,20 @@ function ResultGallery({
                     </span>
                   </div>
                 ) : (
-                  <div className="h-80 flex items-center justify-center text-sm text-red-400 bg-neutral-900">
-                    Generation failed
+                  <div className="h-80 md:h-[70vh] flex flex-col items-center justify-center text-sm text-red-400 bg-neutral-900 p-8 text-center">
+                    <svg className="w-12 h-12 mb-4 text-red-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="font-bold uppercase tracking-widest text-[10px] mb-2">Generation failed</span>
+                    <p className="text-neutral-500 text-xs max-w-xs leading-relaxed italic">
+                      {res.error || "An unknown error occurred. Please try again."}
+                    </p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="mt-6 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full text-[10px] uppercase tracking-widest text-white transition-all"
+                    >
+                      Reload & Retry
+                    </button>
                   </div>
                 )}
               </div>
@@ -465,7 +477,7 @@ function SceneContent() {
     }))
 
     // Global state sync
-    if (patch.status === "done" || patch.status === "error") {
+    if (patch.status === "done" || patch.status === "failed" || patch.status === "error") {
       setIsGenerating(false)
       setProgressText("")
     }
@@ -1002,7 +1014,7 @@ function SceneContent() {
   const activePhoto = photos[0]
   const latestResult = !hideLatestResult ? (
     [...(activePhoto?.results || [])].reverse().find(r => r.status === "done" && r.url) ||
-    [...(activePhoto?.results || [])].reverse().find(r => r.status === "generating" || r.status === "queued" || r.status === "retrying")
+    [...(activePhoto?.results || [])].reverse().find(r => r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "failed" || r.status === "error")
   ) : null
 
   const galleryResults = useMemo(() => {
