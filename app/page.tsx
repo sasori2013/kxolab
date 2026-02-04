@@ -1012,7 +1012,7 @@ function SceneContent() {
 
             {/* LEFT: Image Picker & Main Thumb */}
             <div className="flex items-center gap-2 p-1">
-              <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border border-white/10 group">
+              <div className={`relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border ${activePhoto?.preview ? 'border-[#d4ff00] shadow-[0_0_15px_rgba(212,255,0,0.3)]' : 'border-white/10'} group transition-all`}>
                 {activePhoto?.preview ? (
                   <>
                     <img src={activePhoto.preview} className="w-full h-full object-cover" alt="Input" />
