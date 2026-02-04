@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { supabase as adminClient } from "@/lib/supabase/admin"
 import { nanoBananaGenerate } from "@/lib/ai/nanobanana"
 import { r2PutPng } from "@/lib/r2"
-import { supabase as anonClient } from "@/lib/supabase"
 import { uploadToGoogleDrive } from "@/lib/ai/google-drive"
 
 export const maxDuration = 300
@@ -94,34 +93,11 @@ export async function POST(req: NextRequest) {
             throw new Error("No image data found in generation result")
         }
 
-        // --- GOOGLE DRIVE BACKUP (Sequential Background Task) ---
-        const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-        if (driveFolderId) {
-            console.log(`[Worker Job ${jobId}] Triggering Google Drive backup...`);
-            try {
-                const imgRes = await fetch(resultUrl)
-                if (imgRes.ok) {
-                    const buf = await imgRes.arrayBuffer()
-                    const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
-                    const driveRes = await uploadToGoogleDrive({
-                        buffer: Buffer.from(buf),
-                        filename: driveFilename,
-                        mimeType: 'image/png',
-                        folderId: driveFolderId
-                    })
-                    if (driveRes.ok) console.log(`[Worker Job ${jobId}] Google Drive backup complete: ${driveRes.fileId}`)
-                    else console.warn(`[Worker Job ${jobId}] Google Drive backup failed: ${driveRes.error}`)
-                }
-            } catch (driveErr: any) {
-                console.warn(`[Worker Job ${jobId}] Google Drive backup task failed:`, driveErr.message)
-            }
-        }
-
-        // Finalize using anonClient
+        // Finalize using adminClient
         currentMetadata.duration = Date.now() - startTime
 
         console.log(`[Worker Job ${jobId}] Finalizing job...`)
-        const { error: finalErr } = await anonClient.from('jobs').update({
+        const { error: finalErr } = await adminClient.from('jobs').update({
             status: 'completed',
             result_url: resultUrl,
             error: null,
@@ -134,6 +110,32 @@ export async function POST(req: NextRequest) {
         }).eq('id', jobId)
 
         if (finalErr) throw new Error(`Final Update Error: ${finalErr.message}`)
+        console.log(`[Worker Job ${jobId}] Job status updated to COMPLETED in Supabase.`)
+
+        // --- GOOGLE DRIVE BACKUP (Non-blocking Background Task via 'after') ---
+        const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+        if (driveFolderId) {
+            after(async () => {
+                console.log(`[Worker Job ${jobId}] Triggering background Google Drive backup...`);
+                try {
+                    const imgRes = await fetch(resultUrl)
+                    if (imgRes.ok) {
+                        const buf = await imgRes.arrayBuffer()
+                        const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+                        const driveRes = await uploadToGoogleDrive({
+                            buffer: Buffer.from(buf),
+                            filename: driveFilename,
+                            mimeType: 'image/png',
+                            folderId: driveFolderId
+                        })
+                        if (driveRes.ok) console.log(`[Worker Job ${jobId}] background Google Drive backup complete: ${driveRes.fileId}`)
+                        else console.warn(`[Worker Job ${jobId}] background Google Drive backup failed: ${driveRes.error}`)
+                    }
+                } catch (driveErr: any) {
+                    console.warn(`[Worker Job ${jobId}] background Google Drive backup task failed:`, driveErr.message)
+                }
+            })
+        }
 
         console.log(`[Worker Job ${jobId}] Pipeline Completed Successfully.`)
         return NextResponse.json({ ok: true })

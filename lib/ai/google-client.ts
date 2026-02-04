@@ -196,8 +196,8 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     }
 
     const controller = new AbortController()
-    // Extended timeout to 300s (5 minutes) to match maxDuration
-    const timeoutId = setTimeout(() => controller.abort(), 300000)
+    // Timeout set to 240s (4 minutes) to allow worker to finalize before Vercel's 300s limit
+    const timeoutId = setTimeout(() => controller.abort(), 240000)
 
     const apiStartTime = Date.now()
     let res
