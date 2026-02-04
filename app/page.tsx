@@ -482,7 +482,7 @@ function SceneContent() {
         return poll() // retry
       }
 
-      if (data.status === 'completed' || data.status === 'failed' || data.status === 'retrying') {
+      if (data.status === 'completed' || data.status === 'failed' || data.status === 'error' || data.status === 'retrying') {
         updateSlotByJobId(jobId, {
           url: data.result_url,
           status: data.status === 'completed' ? 'done' : (data.status === 'retrying' ? 'retrying' : 'error'),
@@ -553,7 +553,7 @@ function SceneContent() {
         { event: 'UPDATE', schema: 'public', table: 'jobs' },
         (payload: any) => {
           const updatedJob = payload.new as any
-          if (updatedJob.status === 'completed' || updatedJob.status === 'failed' || updatedJob.status === 'retrying') {
+          if (updatedJob.status === 'completed' || updatedJob.status === 'failed' || updatedJob.status === 'error' || updatedJob.status === 'retrying') {
             updateSlotByJobId(updatedJob.id, {
               url: updatedJob.result_url,
               status: updatedJob.status === 'completed' ? 'done' : (updatedJob.status === 'retrying' ? 'retrying' : 'error'),

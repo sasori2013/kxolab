@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
         await adminClient
             .from('jobs')
             .update({
-                status: 'error',
+                status: 'failed',
                 error: e.message,
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
