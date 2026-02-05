@@ -271,7 +271,7 @@ export async function POST(req: Request) {
 
         await qstashClient.publishJSON({
           url: workerUrl,
-          concurrency: 3,
+          concurrency: 1, // Sequential processing to respect Vertex AI rate limits (especially for Gemini-3 Pro)
           body: payload,
         })
 

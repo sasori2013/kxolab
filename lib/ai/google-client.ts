@@ -11,8 +11,8 @@ const getGoogleClient = async (authOptions: any) => {
  * Exponential backoff helper for retryable errors (429, 503, etc.)
  */
 async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, initialDelay?: number } = {}): Promise<T> {
-    const maxTries = options.maxTries || 3
-    let delay = options.initialDelay || 2000
+    const maxTries = options.maxTries || 5
+    let delay = options.initialDelay || 3000
 
     for (let i = 0; i < maxTries; i++) {
         try {
@@ -20,14 +20,17 @@ async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, 
         } catch (e: any) {
             const isLastTry = i === maxTries - 1
             const msg = String(e?.message || "")
-            // Only retry on rate limits or temporary server errors
-            const isRetryable = /429|resource exhausted|rate limit|503|502|server error/i.test(msg)
+            // Broaden the retryable check to catch all variations of rate/resource/server errors
+            const isRetryable = /429|resource exhausted|rate limit|quota|limit|503|502|server error/i.test(msg)
 
-            if (!isRetryable || isLastTry) throw e
+            if (!isRetryable || isLastTry) {
+                if (isLastTry) console.error(`[Vertex AI] Max retries reached (${maxTries}). Final error: ${msg}`)
+                throw e
+            }
 
-            console.warn(`[Vertex AI] Retryable error encountered (Attempt ${i + 1}/${maxTries}): ${msg}. Waiting ${delay}ms...`)
+            console.warn(`[Vertex AI] Rate/Server error encountered (Attempt ${i + 1}/${maxTries}). Waiting ${delay}ms before next try... Message: ${msg.slice(0, 100)}`)
             await new Promise(resolve => setTimeout(resolve, delay))
-            delay *= 2 // Exponential backoff
+            delay *= 2 // Exponential backoff (3s, 6s, 12s, 24s...)
         }
     }
     throw new Error("Retry logic failed to return")
