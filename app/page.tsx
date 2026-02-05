@@ -338,12 +338,15 @@ function SceneContent() {
       if (savedRes === "2K" || savedRes === "4K") setResolution(savedRes)
       if (savedPhotos) {
         const parsed = JSON.parse(savedPhotos) as any[]
-        // Reconstruct UploadedPhoto objects (File object will be missing, but imageUrl remains)
+        // Reconstruct UploadedPhoto objects
+        // Use imageUrl as preview if available since blob URLs are gone on reload
         const recovered = parsed.map(p => ({
           ...p,
+          preview: p.imageUrl || "",
           file: new File([], p.file?.name || "recovered.jpg", { type: p.file?.type || "image/jpeg" })
         }))
-        setPhotos(recovered)
+        // Filter out items that have no image source at all
+        setPhotos(recovered.filter(p => !!p.imageUrl || !!p.preview))
       }
     } catch (e) {
       console.warn("Failed to load session from localStorage", e)
@@ -352,14 +355,25 @@ function SceneContent() {
 
   // --- SESSION PERSISTENCE (Save) ---
   useEffect(() => {
-    localStorage.setItem("kxolab_prompt", customPrompt)
-    localStorage.setItem("kxolab_resolution", resolution)
-    // Photos persistence (strip the actual File binary, keep metadata and URLs)
-    const photosToSave = photos.map(({ file, ...rest }) => ({
-      ...rest,
-      file: { name: file.name, type: file.type }
-    }))
-    localStorage.setItem("kxolab_photos", JSON.stringify(photosToSave))
+    if (!photos) return
+    localStorage.setItem("kxolab_prompt", customPrompt || "")
+    localStorage.setItem("kxolab_resolution", resolution || "2K")
+    // Photos persistence (strip the actual File binary and large base64 previews)
+    try {
+      const photosToSave = photos.map((p) => {
+        const { file, preview, ...rest } = p
+        return {
+          ...rest,
+          // Only save preview if it's a real URL (not a transient blob or huge base64)
+          preview: (preview?.startsWith('http')) ? preview : (p.imageUrl || ""),
+          file: file ? { name: file.name, type: file.type } : { name: "recovered.jpg", type: "image/jpeg" }
+        }
+      })
+      localStorage.setItem("kxolab_photos", JSON.stringify(photosToSave))
+    } catch (e) {
+      console.warn("Failed to save photos to localStorage (Quota likely exceeded)", e)
+      // If photos fail, at least try to save the prompt
+    }
   }, [customPrompt, resolution, photos])
 
 
@@ -1182,7 +1196,7 @@ function SceneContent() {
                 originalUrl={activePhoto?.imageUrl}
                 results={activePhoto?.results || []}
                 handleDownload={handleDownload}
-                filename={activePhoto?.file.name || "Scene"}
+                filename={activePhoto?.file?.name || "Scene"}
               />
 
               <button
