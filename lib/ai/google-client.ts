@@ -70,16 +70,16 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     }
 
     const is4K = args.resolution === "4K"
-    // CAPPING INPUT IMAGE: Even if output is 4K, input hint only needs ~1.5K. 
-    // Sending 4K as base64 input is too slow and likely to timeout.
-    const MAX_INPUT_DIM = 1536
+    // CAPPING INPUT IMAGE: Gemini-3 Pro / Imagen 3 work best with ~1024px inputs for speed.
+    // 1536 was too slow and likely contributed to the 290s timeouts.
+    const MAX_INPUT_DIM = 1024
     const imgSharp = baseSharp.resize(MAX_INPUT_DIM, MAX_INPUT_DIM, { fit: "inside", withoutEnlargement: true })
 
     // Use JPEG for Vertex AI payload to reduce size (PNG can be too large)
-    const imgBufJpeg = await imgSharp.jpeg({ quality: 90 }).toBuffer()
+    const imgBufJpeg = await imgSharp.jpeg({ quality: 85 }).toBuffer() // Lowered quality slightly for speed
     const imgB64 = imgBufJpeg.toString("base64")
 
-    console.log(`[Vertex AI] Input image prepared. Dim: ${MAX_INPUT_DIM}, Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
+    console.log(`[Vertex AI] Input image optimized. Dim: ${MAX_INPUT_DIM}, Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
 
     // 2. Fetch Reference Images (Gemini only)
     const referenceImageParts: any[] = []
@@ -203,8 +203,9 @@ INSTRUCTIONS:
     }
 
     const controller = new AbortController()
-    // Timeout set to 290s (just below Vercel's 5-minute limit)
-    const timeoutId = setTimeout(() => controller.abort(), 290000)
+    // Standard timeout 290s (Vercel limit safety)
+    const TIMEOUT_MS = 285000
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
     const apiStartTime = Date.now()
     let res

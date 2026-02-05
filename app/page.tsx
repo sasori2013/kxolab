@@ -480,7 +480,11 @@ function SceneContent() {
       if (!hasJob) return p
 
       // 1. Update the results
-      const newResults = p.results.map(r => r.jobId === jobId ? { ...r, ...patch } : r)
+      // If we got a terminal status, clear the current step to avoid "FAILED ... GENERATING" confusion
+      const isTerminal = patch.status === "done" || patch.status === "failed" || patch.status === "error"
+      const patchWithCleanup = isTerminal ? { ...patch, currentStep: undefined } : patch
+
+      const newResults = p.results.map(r => r.jobId === jobId ? { ...r, ...patchWithCleanup } : r)
       const anyInProgress = newResults.some(r => r.status === "generating" || r.status === "queued" || r.status === "retrying")
 
       // 2. Decide if the photo is done
@@ -1089,13 +1093,22 @@ function SceneContent() {
                     loading="lazy"
                   />
                 ) : (
-                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-6 text-center bg-neutral-900">
-                    <div className="w-8 h-8 rounded-full border-2 border-[#d4ff00]/30 border-t-[#d4ff00] animate-spin mb-4" />
-                    <span className="text-[10px] font-bold text-[#d4ff00] tracking-[0.2em] uppercase">
+                  <div className={`aspect-[3/4] flex flex-col items-center justify-center p-6 text-center transition-colors ${res.status === "error" || res.status === "failed" ? "bg-red-950/20" : "bg-neutral-900"}`}>
+                    {res.status === "error" || res.status === "failed" ? (
+                      <svg className="w-8 h-8 text-red-500 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full border-2 border-[#d4ff00]/30 border-t-[#d4ff00] animate-spin mb-4" />
+                    )}
+                    <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${res.status === "error" || res.status === "failed" ? "text-red-500" : "text-[#d4ff00]"}`}>
                       {res.status === "error" || res.status === "failed" ? "Failed" : "Processing"}
                     </span>
                     {res.currentStep && (
                       <span className="text-[8px] text-neutral-500 mt-2 uppercase tracking-widest">{res.currentStep}</span>
+                    )}
+                    {res.error && (
+                      <span className="text-[8px] text-red-500/60 mt-2 lowercase max-w-[150px] line-clamp-2">{res.error}</span>
                     )}
                   </div>
                 )}

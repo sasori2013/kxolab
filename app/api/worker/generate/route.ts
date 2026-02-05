@@ -148,6 +148,8 @@ export async function POST(req: NextRequest) {
 
     } catch (e: any) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
+        const isTimeout = e.message?.includes("aborted") || e.message?.includes("timeout") || e.message?.includes("AbortError")
+
         await adminClient
             .from('jobs')
             .update({
@@ -156,10 +158,19 @@ export async function POST(req: NextRequest) {
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,
-                    error_at: new Date().toISOString()
+                    error_at: new Date().toISOString(),
+                    terminal_failure: isTimeout
                 }
             })
             .eq('id', jobId)
+
+        // If it was a timeout or abort, don't trigger QStash retry (return 200)
+        // because retrying a 5-minute timeout will likely just time out again.
+        if (isTimeout) {
+            console.warn(`[Worker Job ${jobId}] Terminal error (timeout/abort). Returning 200 to stop QStash retries.`)
+            return NextResponse.json({ ok: false, error: e.message })
+        }
+
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
     }
 }
