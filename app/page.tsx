@@ -737,7 +737,7 @@ function SceneContent() {
   }
 
 
-  const addFiles = async (files: File[], target: "base" | "reference" = "reference") => {
+  const addFiles = async (files: File[]) => {
     // Determine image files (including HEIC)
     const imageFiles = files.filter((f) =>
       f.type.startsWith("image/") ||
@@ -745,13 +745,12 @@ function SceneContent() {
       f.name.toLowerCase().endsWith(".heif")
     )
 
-    if (target === "reference" && photosRef.current.length >= MAX_UPLOADS) {
+    if (photosRef.current.length >= MAX_UPLOADS) {
       showError(`You can upload up to ${MAX_UPLOADS} images.`)
       return
     }
 
-    const availableSlots = target === "base" ? 1 : (MAX_UPLOADS - photosRef.current.length)
-    const filesToAdd = imageFiles.slice(0, availableSlots)
+    const filesToAdd = imageFiles.slice(0, MAX_UPLOADS - photosRef.current.length)
 
     if (filesToAdd.length === 0) {
       showError("Please select valid image files")
@@ -776,18 +775,7 @@ function SceneContent() {
           results: [],
         }
 
-        if (target === "base") {
-          // Replace base image, but keep references if any? 
-          // Usually, replacing base means starting a new scene or updating the core.
-          setPhotos(prev => {
-            const next = [...prev]
-            if (next.length > 0) next[0] = newPhoto
-            else next.push(newPhoto)
-            return next
-          })
-        } else {
-          setPhotos((prev) => [...prev, newPhoto])
-        }
+        setPhotos((prev) => [...prev, newPhoto])
 
         try {
           const { imageUrl, category, visualStrategy, brightness, people, tilt } = await uploadToR2({ file, sessionId, photoId })
@@ -823,10 +811,10 @@ function SceneContent() {
     })
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, target: "base" | "reference" = "reference") => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     e.target.value = ""
-    addFiles(files, target)
+    addFiles(files)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -1089,13 +1077,9 @@ function SceneContent() {
                   <>
                     <img
                       src={activePhoto.preview}
-                      className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                      className="w-full h-full object-cover"
                       alt="Input"
-                      onClick={() => document.getElementById('base-upload-input')?.click()}
                     />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm py-0.5 text-center">
-                      <span className="text-[8px] font-bold text-white tracking-widest uppercase">Base</span>
-                    </div>
                     <button
                       onClick={() => handleDeletePhoto(activePhoto.id)}
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
@@ -1111,15 +1095,6 @@ function SceneContent() {
                     <span className="text-2xl font-light">+</span>
                   </button>
                 )}
-                {/* Dedicated Base Image Input */}
-                <input
-                  type="file"
-                  multiple={false}
-                  accept="image/*,.heic,.heif"
-                  className="hidden"
-                  onChange={(e) => handleFileChange(e, "base")}
-                  id="base-upload-input"
-                />
               </div>
 
               {/* Inspiration Slots (Small) */}
@@ -1152,7 +1127,7 @@ function SceneContent() {
                 multiple
                 accept="image/*,.heic,.heif"
                 className="hidden"
-                onChange={(e) => handleFileChange(e, "reference")}
+                onChange={handleFileChange}
               />
             </div>
 
