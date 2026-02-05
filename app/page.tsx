@@ -940,7 +940,7 @@ function SceneContent() {
 
     setIsGenerating(true)
     const resultId = addResultSlot(photoId)
-    // Update parent status so the pill shows "Generating..."
+    // Update photo status so the gallery shows the "Generating..." pill
     updatePhoto(photoId, { status: "generating" })
     updateResultSlot(photoId, resultId, { status: "generating" })
 
@@ -984,6 +984,7 @@ function SceneContent() {
     setProgressText("Initializing…")
 
     const resultId = addResultSlot(mainPhoto.id)
+    // Update photo status so the gallery shows the "Generating..." pill
     updatePhoto(mainPhoto.id, { status: "generating" })
     updateResultSlot(mainPhoto.id, resultId, { status: "generating" })
 
@@ -1029,8 +1030,15 @@ function SceneContent() {
   const latestResult = null
 
   const galleryResults = useMemo(() => {
-    return history
-  }, [history])
+    // Combine active generating slots with history
+    const activeResults = photos.flatMap(p => p.results).filter(r => r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "failed" || r.status === "error");
+
+    // De-duplicate if somehow a completed job is in both
+    const activeIds = new Set(activeResults.map(r => r.jobId).filter(Boolean));
+    const finalHistory = history.filter(h => !h.jobId || !activeIds.has(h.jobId));
+
+    return [...activeResults, ...finalHistory]
+  }, [history, photos])
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-[#00e08a]/30">
@@ -1045,12 +1053,24 @@ function SceneContent() {
                 className="relative break-inside-avoid rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 mb-4 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02]"
                 onClick={() => setSelectedGalleryImage(res.url)}
               >
-                <img
-                  src={res.url!}
-                  alt={`History ${i}`}
-                  className="w-full h-auto"
-                  loading="lazy"
-                />
+                {res.url ? (
+                  <img
+                    src={res.url}
+                    alt={`History ${i}`}
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-6 text-center bg-neutral-900">
+                    <div className="w-8 h-8 rounded-full border-2 border-[#d4ff00]/30 border-t-[#d4ff00] animate-spin mb-4" />
+                    <span className="text-[10px] font-bold text-[#d4ff00] tracking-[0.2em] uppercase">
+                      {res.status === "error" || res.status === "failed" ? "Failed" : "Processing"}
+                    </span>
+                    {res.currentStep && (
+                      <span className="text-[8px] text-neutral-500 mt-2 uppercase tracking-widest">{res.currentStep}</span>
+                    )}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             ))}
