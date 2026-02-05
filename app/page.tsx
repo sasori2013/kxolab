@@ -1025,10 +1025,8 @@ function SceneContent() {
   }
 
   const activePhoto = photos[0]
-  const latestResult = !hideLatestResult ? (
-    [...(activePhoto?.results || [])].reverse().find(r => r.status === "done" && r.url) ||
-    [...(activePhoto?.results || [])].reverse().find(r => r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "failed" || r.status === "error")
-  ) : null
+  /* Removed latestResult logic as per user request to avoid overlays */
+  const latestResult = null
 
   const galleryResults = useMemo(() => {
     return history
@@ -1181,16 +1179,16 @@ function SceneContent() {
             </div>
           </div>
 
-          {/* Status/Error Toast Overlay */}
+          {/* Status/Error Toast Overlay (Keep this for feedback, but remove slide animation if it was here) */}
           {(error || isGenerating || anyGenerating) && (
-            <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-fit px-6 py-2 glass rounded-full flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
+            <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-fit px-6 py-2 glass rounded-full flex items-center gap-3 animate-in fade-in duration-300">
               {error ? (
                 <span className="text-[10px] font-bold text-red-500 tracking-wider uppercase">{error}</span>
               ) : (
                 <>
                   <div className="w-2 h-2 bg-[#d4ff00] rounded-full animate-pulse" />
                   <span className="text-[10px] font-bold text-neutral-400 tracking-[0.2em] uppercase">
-                    {latestResult?.currentStep || "Processing..."}
+                    Processing...
                   </span>
                 </>
               )}

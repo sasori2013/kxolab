@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
         // --- GOOGLE DRIVE BACKUP (Non-blocking Background Task via 'after') ---
         const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
         if (driveFolderId) {
+            console.log(`[Worker Job ${jobId}] Preparing Google Drive backup for result: ${resultUrl}`);
             after(async () => {
                 console.log(`[Worker Job ${jobId}] Triggering background Google Drive backup...`);
                 try {
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
                     if (imgRes.ok) {
                         const buf = await imgRes.arrayBuffer()
                         const driveFilename = `kxolab_${jobId}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+                        console.log(`[Worker Job ${jobId}] Uploading to Google Drive folder: ${driveFolderId}`);
                         const driveRes = await uploadToGoogleDrive({
                             buffer: Buffer.from(buf),
                             filename: driveFilename,
@@ -130,11 +132,15 @@ export async function POST(req: NextRequest) {
                         })
                         if (driveRes.ok) console.log(`[Worker Job ${jobId}] background Google Drive backup complete: ${driveRes.fileId}`)
                         else console.warn(`[Worker Job ${jobId}] background Google Drive backup failed: ${driveRes.error}`)
+                    } else {
+                        console.warn(`[Worker Job ${jobId}] Failed to fetch result for Drive backup: ${imgRes.status} ${imgRes.statusText}`);
                     }
                 } catch (driveErr: any) {
-                    console.warn(`[Worker Job ${jobId}] background Google Drive backup task failed:`, driveErr.message)
+                    console.error(`[Worker Job ${jobId}] background Google Drive backup task failed:`, driveErr.message)
                 }
             })
+        } else {
+            console.warn(`[Worker Job ${jobId}] GOOGLE_DRIVE_FOLDER_ID is missing scope for backup.`);
         }
 
         console.log(`[Worker Job ${jobId}] Pipeline Completed Successfully.`)

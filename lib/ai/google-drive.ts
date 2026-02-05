@@ -16,7 +16,7 @@ export async function uploadToGoogleDrive(args: {
         const auth = new google.auth.GoogleAuth({
             credentials: {
                 client_email: creds.client_email,
-                private_key: creds.private_key,
+                private_key: creds.private_key?.replace(/\\n/g, '\n'),
             },
             scopes: ['https://www.googleapis.com/auth/drive.file'],
         });
