@@ -11,15 +11,16 @@ export async function uploadToGoogleDrive(args: {
     folderId: string;
 }) {
     try {
-        const creds = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '{}');
+        const client_id = process.env.GOOGLE_DRIVE_CLIENT_ID;
+        const client_secret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+        const refresh_token = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 
-        const auth = new google.auth.GoogleAuth({
-            credentials: {
-                client_email: creds.client_email,
-                private_key: creds.private_key?.replace(/\\n/g, '\n'),
-            },
-            scopes: ['https://www.googleapis.com/auth/drive.file'],
-        });
+        if (!client_id || !client_secret || !refresh_token) {
+            throw new Error("Missing Google Drive OAuth2 credentials in env");
+        }
+
+        const auth = new google.auth.OAuth2(client_id, client_secret);
+        auth.setCredentials({ refresh_token });
 
         const drive = google.drive({ version: 'v3', auth });
 
@@ -33,12 +34,13 @@ export async function uploadToGoogleDrive(args: {
             body: Readable.from(args.buffer),
         };
 
-        console.log(`[Google Drive] Uploading ${args.filename} to folder ${args.folderId}...`);
+        console.log(`[Google Drive] Uploading ${args.filename} to folder ${args.folderId} as user...`);
 
         const response = await drive.files.create({
             requestBody: fileMetadata,
             media: media,
             fields: 'id, webViewLink',
+            supportsAllDrives: true,
         });
 
         console.log(`[Google Drive] Upload success: ${response.data.id}`);
