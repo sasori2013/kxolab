@@ -473,6 +473,16 @@ function SceneContent() {
     ))
   }
 
+  const deleteResultSlot = (photoId: string, slotId: string) => {
+    setPhotos(prev => prev.map(p =>
+      p.id === photoId
+        ? { ...p, results: p.results.filter(r => r.id !== slotId) }
+        : p
+    ))
+    // Also remove from history if present
+    setHistory(prev => prev.filter(h => h.id !== slotId))
+  }
+
   const updateSlotByJobId = (jobId: string, patch: Partial<OutputSlot>) => {
     setPhotos(prev => prev.map(p => {
       // Find if this photo owns the job
@@ -1110,8 +1120,31 @@ function SceneContent() {
                     {res.error && (
                       <span className="text-[8px] text-red-500/60 mt-2 lowercase max-w-[150px] line-clamp-2">{res.error}</span>
                     )}
+                    {(res.status === "error" || res.status === "failed") && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const photo = photos.find(p => p.results.some(r => r.id === res.id));
+                          if (photo) handleRegenerate(photo.id);
+                        }}
+                        className="mt-4 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-full text-[9px] font-bold uppercase tracking-wider text-red-400 transition-all active:scale-95"
+                      >
+                        Retry
+                      </button>
+                    )}
                   </div>
                 )}
+                {/* Delete Button (X) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const photo = photos.find(p => p.results.some(r => r.id === res.id));
+                    if (photo) deleteResultSlot(photo.id, res.id);
+                  }}
+                  className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                >
+                  <span className="text-sm">×</span>
+                </button>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             ))}
@@ -1233,7 +1266,6 @@ function SceneContent() {
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z" />
                     </svg>
-                    <span className="opacity-40 text-[10px]">2</span>
                   </>
                 )}
               </button>
