@@ -9,21 +9,29 @@ const getGoogleClient = async (authOptions: any) => {
 
 /**
  * Exponential backoff helper for retryable errors (429, 503, etc.)
+ * Enhanced with deadline awareness to avoid Vercel 300s timeouts.
  */
-async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, initialDelay?: number } = {}): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, initialDelay?: number, startTime?: number } = {}): Promise<T> {
     const maxTries = options.maxTries || 5
+    const startTime = options.startTime || Date.now()
+    const VERCEL_DEADLINE_MS = 290000 // 290s safety limit for 300s maxDuration
     let delay = options.initialDelay || 3000
 
     for (let i = 0; i < maxTries; i++) {
         try {
             return await fn()
         } catch (e: any) {
+            const elapsed = Date.now() - startTime
             const isLastTry = i === maxTries - 1
             const msg = String(e?.message || "")
-            // Broaden the retryable check to catch all variations of rate/resource/server errors
             const isRetryable = /429|resource exhausted|rate limit|quota|limit|503|502|server error/i.test(msg)
 
-            if (!isRetryable || isLastTry) {
+            // If we are getting close to the 5-minute mark, don't try again.
+            // Better to fail with 240s timeout than be killed by Vercel at 300s.
+            const tooCloseToDeadline = elapsed + (delay * 1.5) > VERCEL_DEADLINE_MS
+
+            if (!isRetryable || isLastTry || tooCloseToDeadline) {
+                if (tooCloseToDeadline) console.warn(`[Vertex AI] Stopping retries: too close to Vercel deadline (${Math.round(elapsed / 1000)}s elapsed)`)
                 if (isLastTry) console.error(`[Vertex AI] Max retries reached (${maxTries}). Final error: ${msg}`)
                 throw e
             }
@@ -99,9 +107,9 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     }
 
     const is4K = args.resolution === "4K"
-    // CAPPING INPUT IMAGE: Gemini-3 Pro / Imagen 3 work best with ~1024px inputs for speed.
-    // 1536 was too slow and likely contributed to the 290s timeouts.
-    const MAX_INPUT_DIM = 1024
+    // CAPPING INPUT IMAGE: Gemini-3 Pro / Imagen 3 work best with ~768px inputs for speed.
+    // 1024 was still taking 290s+ during congestion.
+    const MAX_INPUT_DIM = 768
     const imgSharp = baseSharp.resize(MAX_INPUT_DIM, MAX_INPUT_DIM, { fit: "inside", withoutEnlargement: true })
 
     // Use JPEG for Vertex AI payload to reduce size (PNG can be too large)
@@ -232,8 +240,8 @@ INSTRUCTIONS:
     }
 
     const controller = new AbortController()
-    // Standard timeout 290s (Vercel limit safety)
-    const TIMEOUT_MS = 285000
+    // Standard timeout 240s (Safety cushion for Vercel 300s limit)
+    const TIMEOUT_MS = 240000
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
     const apiStartTime = Date.now()

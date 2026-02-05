@@ -473,13 +473,13 @@ function SceneContent() {
     ))
   }
 
-  const deleteResultSlot = (photoId: string, slotId: string) => {
-    setPhotos(prev => prev.map(p =>
-      p.id === photoId
-        ? { ...p, results: p.results.filter(r => r.id !== slotId) }
-        : p
-    ))
-    // Also remove from history if present
+  const deleteResultAnywhere = (slotId: string) => {
+    // 1. Remove from session photos
+    setPhotos(prev => prev.map(p => ({
+      ...p,
+      results: p.results.filter(r => r.id !== slotId)
+    })))
+    // 2. Remove from persistent history
     setHistory(prev => prev.filter(h => h.id !== slotId))
   }
 
@@ -1134,17 +1134,38 @@ function SceneContent() {
                     )}
                   </div>
                 )}
-                {/* Delete Button (X) */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const photo = photos.find(p => p.results.some(r => r.id === res.id));
-                    if (photo) deleteResultSlot(photo.id, res.id);
-                  }}
-                  className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/40 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
-                >
-                  <span className="text-sm">×</span>
-                </button>
+
+                {/* ACTION BUTTONS (TOP RIGHT) */}
+                <div className="absolute top-2 right-2 z-10 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                  {/* Delete Button (X) */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteResultAnywhere(res.id);
+                    }}
+                    className="w-7 h-7 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg active:scale-90 transition-all"
+                    title="Delete"
+                  >
+                    <span className="text-base leading-none">×</span>
+                  </button>
+
+                  {/* Download Button */}
+                  {res.url && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(res.url!);
+                      }}
+                      className="w-7 h-7 bg-[#d4ff00] hover:bg-[#e6ff66] text-black rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all"
+                      title="Download"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             ))}
