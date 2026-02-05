@@ -56,22 +56,6 @@ async function r2PutPng(key: string, bytes: Uint8Array) {
   )
 }
 
-async function withRetry<T>(fn: () => Promise<T>, tries = 3) {
-  let last: any = null
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn()
-    } catch (e: any) {
-      last = e
-      const msg = String(e?.message || "")
-      const retryable = /overload|timeout|rate limit|429|exhausted|503|502|500|fetch failed/i.test(msg)
-      if (!retryable || i === tries - 1) throw e
-      await sleep(1000 * (i + 1))
-    }
-  }
-  throw last
-}
-
 async function callNanoBanana(args: {
   imageUrl: string
   prompt: string

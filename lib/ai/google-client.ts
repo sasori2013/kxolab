@@ -7,6 +7,32 @@ const getGoogleClient = async (authOptions: any) => {
     return new GoogleAuth(authOptions)
 }
 
+/**
+ * Exponential backoff helper for retryable errors (429, 503, etc.)
+ */
+async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, initialDelay?: number } = {}): Promise<T> {
+    const maxTries = options.maxTries || 3
+    let delay = options.initialDelay || 2000
+
+    for (let i = 0; i < maxTries; i++) {
+        try {
+            return await fn()
+        } catch (e: any) {
+            const isLastTry = i === maxTries - 1
+            const msg = String(e?.message || "")
+            // Only retry on rate limits or temporary server errors
+            const isRetryable = /429|resource exhausted|rate limit|503|502|server error/i.test(msg)
+
+            if (!isRetryable || isLastTry) throw e
+
+            console.warn(`[Vertex AI] Retryable error encountered (Attempt ${i + 1}/${maxTries}): ${msg}. Waiting ${delay}ms...`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+            delay *= 2 // Exponential backoff
+        }
+    }
+    throw new Error("Retry logic failed to return")
+}
+
 export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): Promise<NanoBananaResult | NanoBananaError> {
     // Use env variable or default to gemini-3-pro-image-preview
     const model = (args.model || process.env.NANOBANANA_MODEL || process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image-preview").trim()
@@ -208,18 +234,27 @@ INSTRUCTIONS:
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
     const apiStartTime = Date.now()
-    let res
+    let res: Response
     try {
-        res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-                // Custom debug header to help identify requests and potentially bypass some caches
-                "X-Debug-Job-Id": args.imageUrl.split('/').pop() || "unknown",
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal
+        res = await withRetry(async () => {
+            const r = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                    "X-Debug-Job-Id": args.imageUrl.split('/').pop() || "unknown",
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            })
+
+            // If it's a 429 or 5xx, throw so withRetry catches it
+            if (r.status === 429 || r.status >= 500) {
+                const text = await r.text()
+                throw new Error(`Vertex AI error ${r.status}: ${text.slice(0, 200)}`)
+            }
+
+            return r
         })
     } finally {
         clearTimeout(timeoutId)
