@@ -1063,6 +1063,9 @@ function SceneContent() {
                 {activePhoto?.preview ? (
                   <>
                     <img src={activePhoto.preview} className="w-full h-full object-cover" alt="Input" />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm py-0.5 text-center">
+                      <span className="text-[8px] font-bold text-white tracking-widest uppercase">Base</span>
+                    </div>
                     <button
                       onClick={() => handleDeletePhoto(activePhoto.id)}
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"

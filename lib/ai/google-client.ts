@@ -164,7 +164,15 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         const isHighStrength = args.strength && args.strength > 0.7 && isArchitectural
 
         const parts: any[] = [
-            { text: `TASK: Based on the "MAIN SCENE" (Image 1) and the "REFERENCE INSPIRATION" (Images 2+), fulfill this request: ${args.prompt.trim()}` },
+            {
+                text: `TASK: YOU MUST PRESERVE THE EXACT SPATIAL STRUCTURE, LAYOUT, CAMERA ANGLE, AND COLOR PALETTE of "IMAGE 1 (MAIN SCENE)".
+            
+STRICT RULES:
+1. DO NOT move walls, floors, or major furniture positions.
+2. DO NOT change the lighting temperature or the overall color palette of the scene.
+3. USE "REFERENCE INSPIRATION" (Images 2+) ONLY for materials, patterns, and small decorative details.
+4. Fulfill this specific request while strictly following the above rules: ${args.prompt.trim()}`
+            },
             { text: "IMAGE 1 (MAIN SCENE):" },
             {
                 inlineData: {
