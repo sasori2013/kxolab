@@ -737,7 +737,7 @@ function SceneContent() {
   }
 
 
-  const addFiles = async (files: File[]) => {
+  const addFiles = async (files: File[], target: "base" | "reference" = "reference") => {
     // Determine image files (including HEIC)
     const imageFiles = files.filter((f) =>
       f.type.startsWith("image/") ||
@@ -745,12 +745,12 @@ function SceneContent() {
       f.name.toLowerCase().endsWith(".heif")
     )
 
-    if (photosRef.current.length >= MAX_UPLOADS) {
+    if (target === "reference" && photosRef.current.length >= MAX_UPLOADS) {
       showError(`You can upload up to ${MAX_UPLOADS} images.`)
       return
     }
 
-    const availableSlots = MAX_UPLOADS - photosRef.current.length
+    const availableSlots = target === "base" ? 1 : (MAX_UPLOADS - photosRef.current.length)
     const filesToAdd = imageFiles.slice(0, availableSlots)
 
     if (filesToAdd.length === 0) {
@@ -776,7 +776,18 @@ function SceneContent() {
           results: [],
         }
 
-        setPhotos((prev) => [newPhoto, ...prev])
+        if (target === "base") {
+          // Replace base image, but keep references if any? 
+          // Usually, replacing base means starting a new scene or updating the core.
+          setPhotos(prev => {
+            const next = [...prev]
+            if (next.length > 0) next[0] = newPhoto
+            else next.push(newPhoto)
+            return next
+          })
+        } else {
+          setPhotos((prev) => [...prev, newPhoto])
+        }
 
         try {
           const { imageUrl, category, visualStrategy, brightness, people, tilt } = await uploadToR2({ file, sessionId, photoId })
@@ -812,10 +823,10 @@ function SceneContent() {
     })
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, target: "base" | "reference" = "reference") => {
     const files = Array.from(e.target.files || [])
     e.target.value = ""
-    addFiles(files)
+    addFiles(files, target)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -1076,7 +1087,12 @@ function SceneContent() {
               <div className={`relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border ${activePhoto?.preview ? 'border-[#d4ff00] shadow-[0_0_15px_rgba(212,255,0,0.3)]' : 'border-white/10'} group transition-all`}>
                 {activePhoto?.preview ? (
                   <>
-                    <img src={activePhoto.preview} className="w-full h-full object-cover" alt="Input" />
+                    <img
+                      src={activePhoto.preview}
+                      className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                      alt="Input"
+                      onClick={() => document.getElementById('base-upload-input')?.click()}
+                    />
                     <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm py-0.5 text-center">
                       <span className="text-[8px] font-bold text-white tracking-widest uppercase">Base</span>
                     </div>
@@ -1095,6 +1111,15 @@ function SceneContent() {
                     <span className="text-2xl font-light">+</span>
                   </button>
                 )}
+                {/* Dedicated Base Image Input */}
+                <input
+                  type="file"
+                  multiple={false}
+                  accept="image/*,.heic,.heif"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, "base")}
+                  id="base-upload-input"
+                />
               </div>
 
               {/* Inspiration Slots (Small) */}
@@ -1119,6 +1144,16 @@ function SceneContent() {
                   </button>
                 )}
               </div>
+
+              {/* Original File Input for References */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.heic,.heif"
+                className="hidden"
+                onChange={(e) => handleFileChange(e, "reference")}
+              />
             </div>
 
             {/* CENTER: Prompt Input */}
