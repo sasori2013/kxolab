@@ -61,6 +61,9 @@ function createPhotoId() {
 }
 
 function createResultId() {
+  const c = globalThis.crypto as Crypto | undefined
+  const uuid = c?.randomUUID?.()
+  if (uuid) return `r_${uuid.slice(0, 8)}`
   return `r_${Math.random().toString(36).slice(2)}_${Date.now()}`
 }
 
@@ -438,10 +441,12 @@ function SceneContent() {
 
   // Fix: Check if any photo or result slot is currently generating
   const anyGenerating = useMemo(() => {
-    return photos.some(p =>
+    const isAny = photos.some(p =>
       p.status === "generating" ||
-      p.results.some(r => r.status === "generating")
+      p.results.some(r => r.status === "generating" || r.status === "queued" || r.status === "retrying")
     )
+    if (isAny) console.log("[UI] anyGenerating is TRUE", photos.map(p => p.status))
+    return isAny
   }, [photos])
 
   const hasAnyResult = useMemo(() => {
@@ -455,7 +460,7 @@ function SceneContent() {
   }, [photos])
 
   const addResultSlot = (photoId: string) => {
-    const newSlot: OutputSlot = { id: crypto.randomUUID().slice(0, 8), url: null, status: "idle" }
+    const newSlot: OutputSlot = { id: createResultId(), url: null, status: "idle" }
     setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, results: [...p.results, newSlot] } : p))
     return newSlot.id
   }
@@ -474,15 +479,16 @@ function SceneContent() {
       const hasJob = p.results.some(r => r.jobId === jobId)
       if (!hasJob) return p
 
+      // 1. Update the results
       const newResults = p.results.map(r => r.jobId === jobId ? { ...r, ...patch } : r)
-      const anyGenerating = newResults.some(r => r.status === "generating")
+      const anyInProgress = newResults.some(r => r.status === "generating" || r.status === "queued" || r.status === "retrying")
 
-      // Always mark as done if nothing is generating
+      // 2. Decide if the photo is done
       let newStatus = p.status
-      if (!anyGenerating) {
-        newStatus = "done"
-      }
+      if (!anyInProgress) newStatus = "done"
 
+      // 3. Global state sync (only if ALL photos are done)
+      // Note: This is inside setPhotos(prev => ...), we'll do it via a side effect or check all photos here
       return {
         ...p,
         results: newResults,
@@ -490,10 +496,17 @@ function SceneContent() {
       }
     }))
 
-    // Global state sync
+    // Global state sync (Revised: Check all photos from the current state)
     if (patch.status === "done" || patch.status === "failed" || patch.status === "error") {
-      setIsGenerating(false)
-      setProgressText("")
+      // Small delay to ensure state has settled or just check photosRef
+      const stillActive = photosRef.current.some(p =>
+        p.results.some(r => r.jobId !== jobId && (r.status === "generating" || r.status === "queued" || r.status === "retrying"))
+      )
+      console.log(`[UI] Job ${jobId} terminal. Still active?`, stillActive)
+      if (!stillActive) {
+        setIsGenerating(false)
+        setProgressText("")
+      }
     }
 
     // Add to history if completed
@@ -501,10 +514,11 @@ function SceneContent() {
       console.log(`[UI History] Adding Job ${jobId} to production history.`, patch.url)
       setHistory(prev => {
         if (prev.some(h => h.jobId === jobId)) return prev
-        const job = { ...patch, id: crypto.randomUUID().slice(0, 8), jobId, updatedAt: Date.now() } as OutputSlot
+        const job = { ...patch, id: createResultId(), jobId, updatedAt: Date.now() } as OutputSlot
         return [job, ...prev]
       })
-    } else if (patch.status === "error") {
+    }
+    else if (patch.status === "error") {
       console.warn(`[UI Warning] Job ${jobId} failed:`, patch.error)
     }
   }
@@ -596,7 +610,7 @@ function SceneContent() {
 
       if (data) {
         const historySlots: OutputSlot[] = data.map(job => ({
-          id: crypto.randomUUID().slice(0, 8),
+          id: createResultId(),
           jobId: job.id,
           url: job.result_url,
           status: 'done',
@@ -926,8 +940,10 @@ function SceneContent() {
     const json = await res.json().catch(() => ({} as any))
 
     if (!res.ok || !json?.ok) {
+      console.error("[UI] callGenerate failed:", json?.error || res.status)
       throw new Error(json?.error || `generate failed (${res.status})`)
     }
+    console.log("[UI] callGenerate success, jobId:", json.jobId)
     return json as { ok: true; jobId: string; sessionId: string; error?: string }
   }
 
@@ -984,6 +1000,7 @@ function SceneContent() {
     setProgressText("Initializing…")
 
     const resultId = addResultSlot(mainPhoto.id)
+    console.log(`[UI] Starting generation sequence for photo ${mainPhoto.id}, slot ${resultId}`)
     // Update photo status so the gallery shows the "Generating..." pill
     updatePhoto(mainPhoto.id, { status: "generating" })
     updateResultSlot(mainPhoto.id, resultId, { status: "generating" })
@@ -1030,14 +1047,25 @@ function SceneContent() {
   const latestResult = null
 
   const galleryResults = useMemo(() => {
-    // Combine active generating slots with history
-    const activeResults = photos.flatMap(p => p.results).filter(r => r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "failed" || r.status === "error");
+    // 1. Get all results from currently active photos (both generating and done)
+    const activeSlots = photos.flatMap(p => p.results);
 
-    // De-duplicate if somehow a completed job is in both
-    const activeIds = new Set(activeResults.map(r => r.jobId).filter(Boolean));
-    const finalHistory = history.filter(h => !h.jobId || !activeIds.has(h.jobId));
+    // 2. These are the ones we want to show as "active" (at the top)
+    // We include BOTH generating and recently-completed ones for this session
+    const sessionResults = activeSlots.filter(r =>
+      r.status === "generating" || r.status === "queued" || r.status === "retrying" ||
+      r.status === "done" || r.status === "error" || r.status === "failed"
+    );
 
-    return [...activeResults, ...finalHistory]
+    // 3. Prevent duplication: if a job is in sessionResults (even if done), hide it from history
+    const sessionJobIds = new Set(sessionResults.map(r => r.jobId).filter(Boolean));
+    const dedupedHistory = history.filter(h => !h.jobId || !sessionJobIds.has(h.jobId));
+
+    // 4. Combine: Session results first (reverse so newest is top), then history
+    // For sessionResults, we want the most recent ones first
+    const sortedSession = [...sessionResults].reverse();
+
+    return [...sortedSession, ...dedupedHistory]
   }, [history, photos])
 
   return (

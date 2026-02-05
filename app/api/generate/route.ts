@@ -35,7 +35,7 @@ type GenerateReq = {
 
 
 function uid(prefix = "sess") {
-  return `${prefix}_${crypto.randomUUID()}`
+  return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
 }
 function safeString(v: unknown, fallback = "") {
   return typeof v === "string" ? v : fallback
