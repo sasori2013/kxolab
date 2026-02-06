@@ -1147,7 +1147,10 @@ function SceneContent() {
         {/* BACKGROUND LAYER: Immersive History Gallery */}
         <div className="fixed inset-0 z-0 overflow-y-auto pt-4 pb-40 px-4 scroll-smooth no-scrollbar select-none pointer-events-none">
           <div className="max-w-7xl mx-auto mb-10 pointer-events-auto flex justify-between items-center px-4">
-            <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
+              <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.2</span>
+            </div>
             {history.length > 0 && (
               <button
                 onClick={clearHistoryPermanent}
@@ -1361,10 +1364,9 @@ function SceneContent() {
               {photos.length > 0 && (
                 <button
                   onClick={clearAll}
-                  className="h-14 px-4 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-3xl font-medium text-[10px] uppercase tracking-widest transition-all border border-white/5 active:scale-95 flex flex-col items-center justify-center gap-1"
+                  className="h-14 px-5 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-3xl font-medium text-[10px] uppercase tracking-widest transition-all border border-white/5 active:scale-95"
                 >
-                  <span>Reset Workspace</span>
-                  <span className="text-[7px] opacity-30 italic">Ver 2.5.2</span>
+                  Reset Workspace
                 </button>
               )}
             </div>
