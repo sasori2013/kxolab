@@ -451,26 +451,42 @@ function SceneContent() {
         if (!isActiveStatus) return false
 
         // Safety check: if the job is older than 5 minutes, it's probably stuck.
-        // If updatedAt is missing (0), assume it's stuck if it's old (fallback to 0)
+        // If updatedAt is missing (0), assume it's NOT stuck unless we have a reason to believe it started long ago.
+        // Actually, fallback to a "recent enough" timestamp if missing is safest to let it try.
         const startTime = r.updatedAt || 0
-        const isStuck = startTime > 0 && (Date.now() - startTime > 5 * 60 * 1000)
+        const now = Date.now()
 
-        // If we strictly have NO updatedAt yet, let's treat it as NOT stuck for the first 30 seconds
-        // and after that as possibly stuck if it doesn't get an update.
-        // Actually, fallback to 0 is safest to unblock.
+        if (startTime === 0) {
+          // If no timestamp, we assume it's NOT stuck for now (letting polling work)
+          return true
+        }
+
+        const isStuck = now - startTime > 5 * 60 * 1000
         return !isStuck
       })
 
       if (hasActiveResult) return true
 
       // If photo itself is "generating" but has no active results, it might be stuck.
-      // But we'll allow it for now.
       return p.status === "generating"
     })
 
     if (isAny) console.log("[UI] anyGenerating is TRUE. Reason:", photos.map(p => `${p.id}: ${p.status} (results: ${p.results.length})`))
     return isAny
   }, [photos])
+
+  // Emergency: Force all generating/queued slots to "idle"
+  const forceUnlock = () => {
+    setIsGenerating(false)
+    setPhotos(prev => prev.map(p => ({
+      ...p,
+      status: p.status === "generating" ? "uploaded" as const : p.status,
+      results: p.results.map(r => (r.status === "generating" || r.status === "queued" || r.status === "retrying")
+        ? { ...r, status: "idle" as const } : r
+      )
+    })))
+    clearError()
+  }
 
   const hasAnyResult = useMemo(() => {
     return photos.some(
@@ -497,35 +513,34 @@ function SceneContent() {
   }
 
   const deleteResultAnywhere = async (slotId: string) => {
-    // 1. Find the result to get jobId
-    let jobIdToDelete: string | undefined
-    photos.some(p => {
+    // 1. Find the job IDs (if any)
+    let jobIdsToDelete: string[] = []
+    photos.forEach(p => {
       const found = p.results.find(r => r.id === slotId)
-      if (found) {
-        jobIdToDelete = found.jobId
-        return true
-      }
-      return false
+      if (found && found.jobId) jobIdsToDelete.push(found.jobId)
     })
-
-    if (!jobIdToDelete) {
+    if (jobIdsToDelete.length === 0) {
       const historyItem = history.find(h => h.id === slotId)
-      jobIdToDelete = historyItem?.jobId
+      if (historyItem?.jobId) jobIdsToDelete.push(historyItem.jobId)
     }
 
-    // 2. Remove from session photos
-    setPhotos(prev => prev.map(p => ({
-      ...p,
-      results: p.results.filter(r => r.id !== slotId)
-    })))
-    // 3. Remove from persistent history
+    // 2. Remove locally
+    setPhotos(prev => prev.map(p => ({ ...p, results: p.results.filter(r => r.id !== slotId) })))
     setHistory(prev => prev.filter(h => h.id !== slotId))
 
-    // 4. Delete from Supabase (Permanent delete)
-    if (jobIdToDelete) {
-      console.log(`[UI] Deleting job ${jobIdToDelete} from Supabase...`)
-      const { error } = await supabase.from('jobs').delete().eq('id', jobIdToDelete)
-      if (error) console.error("[UI] Failed to delete job from DB:", error)
+    // 3. Delete from Supabase via Server API
+    if (jobIdsToDelete.length > 0) {
+      console.log(`[UI] Requesting server to delete jobs:`, jobIdsToDelete)
+      try {
+        const res = await fetch('/api/jobs/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobIds: jobIdsToDelete })
+        })
+        if (!res.ok) throw new Error("API delete failed")
+      } catch (e) {
+        console.error("[UI] Permanent delete failed:", e)
+      }
     }
   }
 
@@ -533,11 +548,25 @@ function SceneContent() {
     if (!confirm("Are you sure you want to clear your entire history? This cannot be undone.")) return
 
     const jobIds = history.map(h => h.jobId).filter(Boolean) as string[]
-    setHistory([])
+    if (jobIds.length === 0) {
+      setHistory([])
+      return
+    }
 
-    if (jobIds.length > 0) {
-      const { error } = await supabase.from('jobs').delete().in('id', jobIds)
-      if (error) console.error("[UI] Failed to clear history from DB:", error)
+    const prevHistory = [...history]
+    setHistory([]) // Optimistic update
+
+    try {
+      const res = await fetch('/api/jobs/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobIds })
+      })
+      if (!res.ok) throw new Error("API clear failed")
+    } catch (e) {
+      console.error("[UI] Permanent clear failed:", e)
+      setHistory(prevHistory) // Rollback if failed
+      alert("Failed to clear history on server. Please try again.")
     }
   }
 
@@ -1149,7 +1178,7 @@ function SceneContent() {
           <div className="max-w-7xl mx-auto mb-10 pointer-events-auto flex justify-between items-center px-4">
             <div className="flex items-center gap-3">
               <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
-              <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.2</span>
+              <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.3</span>
             </div>
             {history.length > 0 && (
               <button
@@ -1359,6 +1388,20 @@ function SceneContent() {
                   </>
                 )}
               </button>
+
+              {/* EMERGENCY UNLOCK (Only if stuck) */}
+              {(isGenerating || anyGenerating) && (
+                <button
+                  onClick={forceUnlock}
+                  className="h-10 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-2xl font-bold text-[8px] uppercase tracking-widest transition-all border border-red-500/20 active:scale-95 flex items-center gap-1"
+                  title="Force unlock the generate button if it's stuck"
+                >
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                    <path d="M8 11V7a4 4 0 118 0m-4 10v2m-6-10h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V13a2 2 0 012-2z" />
+                  </svg>
+                  <span>Force Unlock</span>
+                </button>
+              )}
 
               {/* CLEAR ALL BUTTON */}
               {photos.length > 0 && (
