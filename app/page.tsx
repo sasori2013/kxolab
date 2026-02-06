@@ -16,10 +16,11 @@ interface OutputSlot {
   url: string | null
   status: SlotStatus
   error?: string
-  updatedAt?: number
-  currentStep?: string // Added for progress display
   isCoolingDown?: boolean
   retryCount?: number
+  thumbnailUrl?: string // Added for lightweight display
+  updatedAt?: number
+  currentStep?: string // Added for progress display
 }
 
 interface UploadedPhoto {
@@ -443,7 +444,18 @@ function SceneContent() {
   const anyGenerating = useMemo(() => {
     const isAny = photos.some(p =>
       p.status === "generating" ||
-      p.results.some(r => r.status === "generating" || r.status === "queued" || r.status === "retrying")
+      p.results.some(r => {
+        // If the job is generating/queued, we consider it "active"
+        const isActiveStatus = r.status === "generating" || r.status === "queued" || r.status === "retrying"
+        if (!isActiveStatus) return false
+
+        // Safety check: if the job is older than 5 minutes, it's probably stuck.
+        // Ignore it so the button can be re-enabled.
+        const startTime = r.updatedAt || 0
+        const isStuck = startTime > 0 && (Date.now() - startTime > 5 * 60 * 1000)
+
+        return !isStuck
+      })
     )
     if (isAny) console.log("[UI] anyGenerating is TRUE", photos.map(p => p.status))
     return isAny
@@ -528,7 +540,7 @@ function SceneContent() {
       console.log(`[UI History] Adding Job ${jobId} to production history.`, patch.url)
       setHistory(prev => {
         if (prev.some(h => h.jobId === jobId)) return prev
-        const job = { ...patch, id: createResultId(), jobId, updatedAt: Date.now() } as OutputSlot
+        const job = { ...patch, id: createResultId(), jobId, updatedAt: Date.now(), thumbnailUrl: patch.thumbnailUrl } as OutputSlot
         return [job, ...prev]
       })
     }
@@ -576,7 +588,8 @@ function SceneContent() {
           url: data.result_url,
           status: data.status === 'completed' ? 'done' : (data.status === 'retrying' ? 'retrying' : 'error'),
           error: data.status === 'retrying' ? null : data.error,
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          thumbnailUrl: data.execution_metadata?.thumbnail_url
         })
         if (data.status !== 'retrying') {
           console.log("Job polling finished for:", jobId, "status:", data.status)
@@ -628,7 +641,8 @@ function SceneContent() {
           jobId: job.id,
           url: job.result_url,
           status: 'done',
-          updatedAt: new Date(job.created_at).getTime()
+          updatedAt: new Date(job.created_at).getTime(),
+          thumbnailUrl: job.execution_metadata?.thumbnail_url
         }))
         setHistory(historySlots)
       }
@@ -647,7 +661,8 @@ function SceneContent() {
               url: updatedJob.result_url,
               status: updatedJob.status === 'completed' ? 'done' : (updatedJob.status === 'retrying' ? 'retrying' : 'error'),
               error: updatedJob.status === 'retrying' ? null : updatedJob.error,
-              updatedAt: Date.now()
+              updatedAt: Date.now(),
+              thumbnailUrl: updatedJob.execution_metadata?.thumbnail_url
             })
           } else {
             // Update current step & backoff
@@ -1097,7 +1112,7 @@ function SceneContent() {
               >
                 {res.url ? (
                   <img
-                    src={res.url}
+                    src={res.thumbnailUrl || res.url}
                     alt={`History ${i}`}
                     className="w-full h-auto"
                     loading="lazy"

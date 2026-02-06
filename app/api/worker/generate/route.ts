@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse, after } from "next/server"
 import { supabase as adminClient } from "@/lib/supabase/admin"
 import { nanoBananaGenerate } from "@/lib/ai/nanobanana"
-import { r2PutPng } from "@/lib/r2"
+import { r2PutPng, r2Put } from "@/lib/r2"
 import { uploadToGoogleDrive } from "@/lib/ai/google-drive"
+import sharp from "sharp"
 
 export const maxDuration = 300
 
@@ -111,6 +112,43 @@ export async function POST(req: NextRequest) {
 
         if (finalErr) throw new Error(`Final Update Error: ${finalErr.message}`)
         console.log(`[Worker Job ${jobId}] Job status updated to COMPLETED in Supabase.`)
+
+        // --- THUMBNAIL GENERATION (Non-blocking but before Drive backup) ---
+        after(async () => {
+            console.log(`[Worker Job ${jobId}] Starting thumbnail generation for result: ${resultUrl}`);
+            try {
+                const imgRes = await fetch(resultUrl)
+                if (!imgRes.ok) throw new Error(`Failed to fetch result image for thumbnail: ${imgRes.status}`)
+                const buf = await imgRes.arrayBuffer()
+
+                const thumbBuffer = await sharp(Buffer.from(buf))
+                    .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+                    .toFormat("jpeg", { quality: 80 })
+                    .toBuffer()
+
+                const thumbKey = key.replace(/\.[^.]+$/, "_thumb.jpg")
+                const uploadRes = await r2Put({
+                    key: thumbKey,
+                    body: thumbBuffer,
+                    contentType: "image/jpeg"
+                })
+
+                if (uploadRes.publicUrl) {
+                    console.log(`[Worker Job ${jobId}] Thumbnail uploaded: ${uploadRes.publicUrl}`)
+                    // Update metadata with thumb URL
+                    await adminClient.from('jobs').update({
+                        execution_metadata: {
+                            ...currentMetadata,
+                            completed: true,
+                            thumbnail_url: uploadRes.publicUrl,
+                            finished_at: new Date().toISOString()
+                        }
+                    }).eq('id', jobId)
+                }
+            } catch (err: any) {
+                console.error(`[Worker Job ${jobId}] Thumbnail generation failed:`, err.message)
+            }
+        })
 
         // --- GOOGLE DRIVE BACKUP (Non-blocking Background Task via 'after') ---
         const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID
