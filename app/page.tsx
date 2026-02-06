@@ -451,8 +451,9 @@ function SceneContent() {
 
         // Safety check: if the job is older than 5 minutes, it's probably stuck.
         // Ignore it so the button can be re-enabled.
-        const startTime = r.updatedAt || 0
-        const isStuck = startTime > 0 && (Date.now() - startTime > 5 * 60 * 1000)
+        // We use Date.now() if updatedAt is missing as a fallback for the very first check.
+        const startTime = r.updatedAt || Date.now()
+        const isStuck = Date.now() - startTime > 5 * 60 * 1000
 
         return !isStuck
       })
@@ -472,7 +473,7 @@ function SceneContent() {
   }, [photos])
 
   const addResultSlot = (photoId: string) => {
-    const newSlot: OutputSlot = { id: createResultId(), url: null, status: "idle" }
+    const newSlot: OutputSlot = { id: createResultId(), url: null, status: "idle", updatedAt: Date.now() }
     setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, results: [...p.results, newSlot] } : p))
     return newSlot.id
   }
@@ -867,13 +868,12 @@ function SceneContent() {
   }
 
   const handleDeletePhoto = (photoId: string) => {
-    if (isGenerating || anyGenerating) return
+    // Allow deletion even if generating to help stuck users
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
     clearError()
   }
 
   const clearResultsAll = () => {
-    if (isGenerating || anyGenerating) return
     setPhotos((prev) => prev.map((p) => ({ ...p, results: [] })))
     setHasEnhancedOnce(false)
     setProgressText("")
@@ -881,7 +881,6 @@ function SceneContent() {
   }
 
   const clearAll = () => {
-    if (isGenerating || anyGenerating) return
     setPhotos([])
     setHasEnhancedOnce(false)
     setProgressText("")
