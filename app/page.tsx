@@ -442,23 +442,31 @@ function SceneContent() {
 
   // Fix: Check if any photo or result slot is currently generating
   const anyGenerating = useMemo(() => {
-    const isAny = photos.some(p =>
-      p.status === "generating" ||
-      p.results.some(r => {
-        // If the job is generating/queued, we consider it "active"
+    const isAny = photos.some(p => {
+      // Check results first
+      const hasActiveResult = p.results.some(r => {
         const isActiveStatus = r.status === "generating" || r.status === "queued" || r.status === "retrying"
         if (!isActiveStatus) return false
 
         // Safety check: if the job is older than 5 minutes, it's probably stuck.
-        // Ignore it so the button can be re-enabled.
-        // We use Date.now() if updatedAt is missing as a fallback for the very first check.
-        const startTime = r.updatedAt || Date.now()
-        const isStuck = Date.now() - startTime > 5 * 60 * 1000
+        // If updatedAt is missing (0), assume it's stuck if it's old (fallback to 0)
+        const startTime = r.updatedAt || 0
+        const isStuck = startTime > 0 && (Date.now() - startTime > 5 * 60 * 1000)
 
+        // If we strictly have NO updatedAt yet, let's treat it as NOT stuck for the first 30 seconds
+        // and after that as possibly stuck if it doesn't get an update.
+        // Actually, fallback to 0 is safest to unblock.
         return !isStuck
       })
-    )
-    if (isAny) console.log("[UI] anyGenerating is TRUE", photos.map(p => p.status))
+
+      if (hasActiveResult) return true
+
+      // If photo itself is "generating" but has no active results, it might be stuck.
+      // But we'll allow it for now.
+      return p.status === "generating"
+    })
+
+    if (isAny) console.log("[UI] anyGenerating is TRUE. Reason:", photos.map(p => `${p.id}: ${p.status} (results: ${p.results.length})`))
     return isAny
   }, [photos])
 
@@ -868,7 +876,6 @@ function SceneContent() {
   }
 
   const handleDeletePhoto = (photoId: string) => {
-    // Allow deletion even if generating to help stuck users
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
     clearError()
   }
@@ -1287,6 +1294,12 @@ function SceneContent() {
               <button
                 onClick={generateForAll}
                 disabled={isGenerating || anyGenerating || anyUploading || !activePhoto?.imageUrl}
+                title={
+                  isGenerating ? "Processing local state..." :
+                    anyGenerating ? "A job is currently in progress..." :
+                      anyUploading ? "Uploading reference images..." :
+                        !activePhoto?.imageUrl ? "Please upload an image first" : "Generate!"
+                }
                 className="h-14 px-8 bg-[#d4ff00] text-black rounded-3xl font-bold text-xs tracking-tight hover:bg-[#e6ff66] disabled:opacity-20 disabled:grayscale transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_30px_rgba(212,255,0,0.2)]"
               >
                 {isGenerating || anyGenerating ? (
