@@ -370,7 +370,9 @@ function SceneContent() {
           ...rest,
           // Only save preview if it's a real URL (not a transient blob or huge base64)
           preview: (preview?.startsWith('http')) ? preview : (p.imageUrl || ""),
-          file: file ? { name: file.name, type: file.type } : { name: "recovered.jpg", type: "image/jpeg" }
+          file: file ? { name: file.name, type: file.type } : { name: "recovered.jpg", type: "image/jpeg" },
+          // results に thumbnailUrl を含む
+          results: p.results.map(r => ({ ...r, thumbnailUrl: r.thumbnailUrl }))
         }
       })
       localStorage.setItem("kxolab_photos", JSON.stringify(photosToSave))
@@ -494,14 +496,49 @@ function SceneContent() {
     ))
   }
 
-  const deleteResultAnywhere = (slotId: string) => {
-    // 1. Remove from session photos
+  const deleteResultAnywhere = async (slotId: string) => {
+    // 1. Find the result to get jobId
+    let jobIdToDelete: string | undefined
+    photos.some(p => {
+      const found = p.results.find(r => r.id === slotId)
+      if (found) {
+        jobIdToDelete = found.jobId
+        return true
+      }
+      return false
+    })
+
+    if (!jobIdToDelete) {
+      const historyItem = history.find(h => h.id === slotId)
+      jobIdToDelete = historyItem?.jobId
+    }
+
+    // 2. Remove from session photos
     setPhotos(prev => prev.map(p => ({
       ...p,
       results: p.results.filter(r => r.id !== slotId)
     })))
-    // 2. Remove from persistent history
+    // 3. Remove from persistent history
     setHistory(prev => prev.filter(h => h.id !== slotId))
+
+    // 4. Delete from Supabase (Permanent delete)
+    if (jobIdToDelete) {
+      console.log(`[UI] Deleting job ${jobIdToDelete} from Supabase...`)
+      const { error } = await supabase.from('jobs').delete().eq('id', jobIdToDelete)
+      if (error) console.error("[UI] Failed to delete job from DB:", error)
+    }
+  }
+
+  const clearHistoryPermanent = async () => {
+    if (!confirm("Are you sure you want to clear your entire history? This cannot be undone.")) return
+
+    const jobIds = history.map(h => h.jobId).filter(Boolean) as string[]
+    setHistory([])
+
+    if (jobIds.length > 0) {
+      const { error } = await supabase.from('jobs').delete().in('id', jobIds)
+      if (error) console.error("[UI] Failed to clear history from DB:", error)
+    }
   }
 
   const updateSlotByJobId = (jobId: string, patch: Partial<OutputSlot>) => {
@@ -1109,6 +1146,17 @@ function SceneContent() {
       <main className="relative min-h-screen flex flex-col">
         {/* BACKGROUND LAYER: Immersive History Gallery */}
         <div className="fixed inset-0 z-0 overflow-y-auto pt-4 pb-40 px-4 scroll-smooth no-scrollbar select-none pointer-events-none">
+          <div className="max-w-7xl mx-auto mb-10 pointer-events-auto flex justify-between items-center px-4">
+            <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
+            {history.length > 0 && (
+              <button
+                onClick={clearHistoryPermanent}
+                className="text-[9px] font-bold tracking-widest uppercase text-red-500/60 hover:text-red-500 transition-colors py-2 px-4 rounded-full bg-white/5 border border-white/5"
+              >
+                Clear History
+              </button>
+            )}
+          </div>
           <div className="max-w-7xl mx-auto columns-2 md:columns-3 lg:columns-4 gap-4 opacity-100">
             {galleryResults.map((res, i) => (
               <div
@@ -1317,6 +1365,16 @@ function SceneContent() {
                   </>
                 )}
               </button>
+
+              {/* CLEAR ALL BUTTON */}
+              {photos.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="h-14 px-4 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-3xl font-medium text-[10px] uppercase tracking-widest transition-all border border-white/5 active:scale-95"
+                >
+                  Clear All
+                </button>
+              )}
             </div>
           </div>
 
