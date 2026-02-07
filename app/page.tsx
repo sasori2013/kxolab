@@ -1294,6 +1294,7 @@ function SceneContent() {
                       className="w-full h-full object-cover"
                       alt="Input"
                     />
+                    <div className="absolute top-1 left-1 z-10 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded tracking-tighter border border-white/10 uppercase">Main</div>
                     <button
                       onClick={() => handleDeletePhoto(activePhoto.id)}
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
@@ -1313,8 +1314,9 @@ function SceneContent() {
 
               {/* Inspiration Slots (Small) */}
               <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
-                {photos.slice(1).map((photo) => (
+                {photos.slice(1).map((photo, idx) => (
                   <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
+                    <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[8px] font-bold px-1 rounded tracking-tighter border border-white/10">{String.fromCharCode(65 + idx)}</div>
                     <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
                     <button
                       onClick={() => handleDeletePhoto(photo.id)}

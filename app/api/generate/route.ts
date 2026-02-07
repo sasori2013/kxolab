@@ -8,7 +8,6 @@ import { Category } from "@/lib/ai/categories"
 import { createClient } from "@/lib/supabase/server"
 import { supabase as adminClient } from "@/lib/supabase/admin"
 import { analyzeImageFromUrl, Brightness, People } from "@/lib/ai/analyze"
-import { buildPromptDirectEnhancement } from "@/lib/ai/prompts-v2"
 import crypto from "crypto"
 
 export const runtime = "nodejs"

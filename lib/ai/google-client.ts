@@ -209,7 +209,7 @@ INSTRUCTIONS:
 - Combine the elements into a cohesive new scene.
 - Be creative but realistic based on the visual evidence provided.`
             },
-            { text: "IMAGE 1:" },
+            { text: "IMAGE 1 (MAIN):" },
             {
                 inlineData: {
                     mimeType: "image/jpeg",
@@ -220,7 +220,7 @@ INSTRUCTIONS:
 
         if (referenceImageParts.length > 0) {
             referenceImageParts.forEach((refPart, i) => {
-                parts.push({ text: `IMAGE ${i + 2} (REFERENCE INSPIRATION):` })
+                parts.push({ text: `IMAGE ${i + 2} (REFERENCE ${String.fromCharCode(65 + i)}):` })
                 parts.push(refPart)
             })
         }
