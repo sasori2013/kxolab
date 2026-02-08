@@ -15,7 +15,7 @@ export const maxDuration = 300 // Vercel Pro Limit (Hobby is 60s, but let's try)
 
 type GenerateReq = {
   sessionId?: string
-  imageUrl: string
+  imageUrl?: string
   prompt?: string
   debug?: boolean
   strength?: number
@@ -111,11 +111,10 @@ export async function POST(req: Request) {
       aspectRatio: body.aspectRatio
     })
     const imageUrl = safeString(body.imageUrl)
+    const prompt = safeString(body.prompt)
     const debug = Boolean(body.debug)
 
-
-
-    if (!imageUrl) return NextResponse.json({ ok: false, error: "imageUrl is required" }, { status: 400 })
+    if (!imageUrl && !prompt) return NextResponse.json({ ok: false, error: "imageUrl or prompt is required" }, { status: 400 })
 
     const sessionId = safeString(body.sessionId) || uid("sess")
 

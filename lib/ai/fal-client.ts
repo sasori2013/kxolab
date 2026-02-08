@@ -20,10 +20,10 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
 
     // 1. Fetch image and convert to Data URI
     let imageUrlInput = args.imageUrl
-    let closestRatio = "1:1" // Default for Nano Banana if calc fails
+    let closestRatio = args.aspectRatio || "1:1" // Default for Nano Banana if calc fails
 
-    try {
-        if (!imageUrlInput.startsWith("data:")) {
+    if (imageUrlInput && !imageUrlInput.startsWith("data:")) {
+        try {
             const resp = await fetch(imageUrlInput)
             if (!resp.ok) throw new Error(`Failed to fetch input image: ${resp.status}`)
             const buf = await resp.arrayBuffer()
@@ -73,9 +73,9 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             const b64 = resizedBuf.toString("base64")
             const mime = "image/png"
             imageUrlInput = `data:${mime};base64,${b64}`
+        } catch (e) {
+            console.warn("[Fal.ai] Failed to resize/convert/analyze image.", e)
         }
-    } catch (e) {
-        console.warn("[Fal.ai] Failed to resize/convert/analyze image.", e)
     }
 
     try {

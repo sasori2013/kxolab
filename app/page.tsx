@@ -1091,42 +1091,76 @@ function SceneContent() {
     clearError()
 
     const current = photosRef.current
-    if (current.length === 0) return showError("Please upload at least one image")
-
-    const mainPhoto = current[0]
-    if (!mainPhoto.imageUrl) return showError("Main photo is still uploading. Please wait.")
+    if (current.length === 0 && !customPrompt.trim()) {
+      return showError("Please enter a prompt or upload an image")
+    }
 
     setHasEnhancedOnce(true)
     setIsGenerating(true)
     setProgressText("Initializing…")
 
-    const resultId = addResultSlot(mainPhoto.id)
-    console.log(`[UI] Starting generation sequence for photo ${mainPhoto.id}, slot ${resultId}`)
-    // Update photo status so the gallery shows the "Generating..." pill
-    updatePhoto(mainPhoto.id, { status: "generating" })
-    updateResultSlot(mainPhoto.id, resultId, { status: "generating" })
-
     try {
-      const out = await callGenerate(
-        mainPhoto.imageUrl,
-        mainPhoto.category,
-        mainPhoto.subjectDescription,
-        mainPhoto.visualStrategy,
-        mainPhoto.brightness,
-        mainPhoto.people,
-        mainPhoto.tilt,
-        mainPhoto.id,
-        current.slice(1).map(p => p.imageUrl).filter(Boolean) as string[]
-      )
-      if (out.ok && out.jobId) {
-        updateResultSlot(mainPhoto.id, resultId, { jobId: out.jobId, status: "generating" })
-        checkJobStatus(out.jobId)
+      if (current.length > 0) {
+        const mainPhoto = current[0]
+        if (!mainPhoto.imageUrl) {
+          setError("Photo is still uploading. Please wait.")
+          return
+        }
+
+        const resultId = addResultSlot(mainPhoto.id)
+        updatePhoto(mainPhoto.id, { status: "generating" })
+        updateResultSlot(mainPhoto.id, resultId, { status: "generating" })
+
+        const out = await callGenerate(
+          mainPhoto.imageUrl,
+          mainPhoto.category,
+          mainPhoto.subjectDescription,
+          mainPhoto.visualStrategy,
+          mainPhoto.brightness,
+          mainPhoto.people,
+          mainPhoto.tilt,
+          mainPhoto.id,
+          current.slice(1).map(p => p.imageUrl).filter(Boolean) as string[]
+        )
+
+        if (out.ok && out.jobId) {
+          updateResultSlot(mainPhoto.id, resultId, { jobId: out.jobId, status: "generating" })
+          checkJobStatus(out.jobId)
+        } else {
+          throw new Error(out.error || "Failed to start generation")
+        }
       } else {
-        throw new Error(out.error || "Failed to start generation")
+        // Prompt-only generation
+        const photoId = createPhotoId()
+        const newPhoto: UploadedPhoto = {
+          id: photoId,
+          file: new File([], "text-prompt.txt"),
+          preview: "",
+          status: "generating",
+          imageUrl: null,
+          results: [],
+        }
+
+        // Add placeholder photo and get the new slot
+        setPhotos([newPhoto])
+        const resultId = createResultId()
+        const newSlot: OutputSlot = { id: resultId, url: null, status: "generating", updatedAt: Date.now() }
+
+        // We need to wait for state to update or just call API and then update
+        // Since setPhotos is async, we'll manually construct the update logic
+        const out = await callGenerate("", "other", undefined, undefined, undefined, undefined, undefined, photoId, [])
+
+        if (out.ok && out.jobId) {
+          setPhotos([{
+            ...newPhoto,
+            results: [{ ...newSlot, jobId: out.jobId }]
+          }])
+          checkJobStatus(out.jobId)
+        } else {
+          throw new Error(out.error || "Failed to start generation")
+        }
       }
     } catch (e: any) {
-      updateResultSlot(mainPhoto.id, resultId, { status: "error", error: e?.message ?? "Generation failed" })
-      updatePhoto(mainPhoto.id, { status: "error" })
       showError(e?.message ?? "Generation failed")
     } finally {
       setIsGenerating(false)
@@ -1366,12 +1400,12 @@ function SceneContent() {
               {/* GENERATE BUTTON */}
               <button
                 onClick={generateForAll}
-                disabled={isGenerating || anyGenerating || anyUploading || !activePhoto?.imageUrl}
+                disabled={isGenerating || anyGenerating || anyUploading || (!activePhoto?.imageUrl && !customPrompt.trim())}
                 title={
                   isGenerating ? "Processing local state..." :
                     anyGenerating ? "A job is currently in progress..." :
                       anyUploading ? "Uploading reference images..." :
-                        !activePhoto?.imageUrl ? "Please upload an image first" : "Generate!"
+                        (!activePhoto?.imageUrl && !customPrompt.trim()) ? "Please upload an image or enter a prompt" : "Generate!"
                 }
                 className="h-14 px-8 bg-[#d4ff00] text-black rounded-3xl font-bold text-xs tracking-tight hover:bg-[#e6ff66] disabled:opacity-20 disabled:grayscale transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_30px_rgba(212,255,0,0.2)]"
               >

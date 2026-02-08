@@ -91,32 +91,37 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     const sharp = (await import("sharp")).default
 
     // 1. Fetch Image
-    const imgRes = await fetch(args.imageUrl, { cache: "no-store" })
-    if (!imgRes.ok) return { ok: false, error: `Failed to fetch input image: ${imgRes.status}` }
-    const imgBufRaw = await imgRes.arrayBuffer()
-    const buffer = await ensureJpeg(Buffer.from(imgBufRaw))
+    let imgB64: string | undefined
+    const metadata = args.imageUrl ? await sharp(await (async () => {
+        const res = await fetch(args.imageUrl!, { cache: "no-store" })
+        if (!res.ok) throw new Error(`Failed to fetch input image: ${res.status}`)
+        return Buffer.from(await res.arrayBuffer())
+    })()).metadata() : null
 
-    const baseSharp = sharp(buffer).rotate()
-    const metadata = await baseSharp.metadata()
-    const isPortrait = (metadata.width || 0) < (metadata.height || 0)
-    let targetRatio = args.aspectRatio || (isPortrait ? "3:4" : "4:3")
+    const isPortrait = metadata ? (metadata.width || 0) < (metadata.height || 0) : false
+    let targetRatio = args.aspectRatio || (metadata ? (isPortrait ? "3:4" : "4:3") : "1:1")
 
-    // Handle "original" aspect ratio
-    if (targetRatio === "original") {
-        targetRatio = `${metadata.width}:${metadata.height}`
+    if (args.imageUrl) {
+        // Handle "original" aspect ratio
+        if (targetRatio === "original" && metadata) {
+            targetRatio = `${metadata.width}:${metadata.height}`
+        }
+
+        const imgRes = await fetch(args.imageUrl, { cache: "no-store" })
+        if (!imgRes.ok) return { ok: false, error: `Failed to fetch input image: ${imgRes.status}` }
+        const imgBufRaw = await imgRes.arrayBuffer()
+        const buffer = await ensureJpeg(Buffer.from(imgBufRaw))
+
+        // CAPPING INPUT IMAGE: Gemini-3 Pro / Imagen 3 work best with ~768px inputs for speed.
+        const MAX_INPUT_DIM = 768
+        const imgSharp = sharp(buffer).rotate().resize(MAX_INPUT_DIM, MAX_INPUT_DIM, { fit: "inside", withoutEnlargement: true })
+
+        // Use JPEG for Vertex AI payload to reduce size (PNG can be too large)
+        const imgBufJpeg = await imgSharp.jpeg({ quality: 85 }).toBuffer()
+        imgB64 = imgBufJpeg.toString("base64")
+
+        console.log(`[Vertex AI] Input image optimized. Dim: ${MAX_INPUT_DIM}, Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
     }
-
-    const is4K = args.resolution === "4K"
-    // CAPPING INPUT IMAGE: Gemini-3 Pro / Imagen 3 work best with ~768px inputs for speed.
-    // 1024 was still taking 290s+ during congestion.
-    const MAX_INPUT_DIM = 768
-    const imgSharp = baseSharp.resize(MAX_INPUT_DIM, MAX_INPUT_DIM, { fit: "inside", withoutEnlargement: true })
-
-    // Use JPEG for Vertex AI payload to reduce size (PNG can be too large)
-    const imgBufJpeg = await imgSharp.jpeg({ quality: 85 }).toBuffer() // Lowered quality slightly for speed
-    const imgB64 = imgBufJpeg.toString("base64")
-
-    console.log(`[Vertex AI] Input image optimized. Dim: ${MAX_INPUT_DIM}, Size: ${Math.round(imgBufJpeg.length / 1024)}KB`)
 
     // 2. Fetch Reference Images (Gemini only)
     const referenceImageParts: any[] = []
@@ -164,32 +169,34 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             ],
             parameters: {
                 sampleCount: 1,
-                // Negative prompt to strictly forbid movement/additions
-                // Negative prompt should not forbid orientation changes if we are fixing tilt
-                negativePrompt: args.strength && args.strength > 0.7
-                    ? "extra objects, moving objects, merged plates, different colors, new items, blurry"
-                    : "extra objects, moving objects, merged plates, different colors, new items, blurry",
-                referenceImages: [
-                    {
-                        referenceId: 1,
-                        // REFERENCE_TYPE_STRUCTURE is less rigid than CONTROL, allowing for rotation and perspective fix
-                        referenceType: args.strength && args.strength > 0.7 ? "REFERENCE_TYPE_STRUCTURE" : "REFERENCE_TYPE_CONTROL",
-                        image: { bytesBase64Encoded: imgB64 },
-                    }
-                ],
-                referenceConfig: [
-                    {
-                        referenceId: 1,
-                        // Lower weight (0.1-0.3) allows the AI to "re-imagine" the geometry (fix tilt/perspective)
-                        // If strength is high (suggesting distortion), we lower the weight aggressively.
-                        // Weight 0.08 allows for structural change while giving hints for texture/pattern
-                        // If strength is high (suggesting distortion), we lower the weight but keep some detail hint.
-                        weight: args.strength && args.strength > 0.7 ? 0.08 : Math.max(0.08, 1.0 - (args.strength || 0.45))
-                    }
-                ],
-                guidanceScale: args.strength && args.strength > 0.7 ? 90 : (args.strength ? (args.strength * 60) : 30), // Max guidance when transformation is needed
                 aspectRatio: targetRatio,
             }
+        }
+
+        if (imgB64) {
+            payload.parameters.negativePrompt = args.strength && args.strength > 0.7
+                ? "extra objects, moving objects, merged plates, different colors, new items, blurry"
+                : "extra objects, moving objects, merged plates, different colors, new items, blurry"
+
+            payload.parameters.referenceImages = [
+                {
+                    referenceId: 1,
+                    // REFERENCE_TYPE_STRUCTURE is less rigid than CONTROL, allowing for rotation and perspective fix
+                    referenceType: args.strength && args.strength > 0.7 ? "REFERENCE_TYPE_STRUCTURE" : "REFERENCE_TYPE_CONTROL",
+                    image: { bytesBase64Encoded: imgB64 },
+                }
+            ]
+            payload.parameters.referenceConfig = [
+                {
+                    referenceId: 1,
+                    // Lower weight (0.1-0.3) allows the AI to "re-imagine" the geometry (fix tilt/perspective)
+                    // If strength is high (suggesting distortion), we lower the weight aggressively.
+                    // Weight 0.08 allows for structural change while giving hints for texture/pattern
+                    // If strength is high (suggesting distortion), we lower the weight but keep some detail hint.
+                    weight: args.strength && args.strength > 0.7 ? 0.08 : Math.max(0.08, 1.0 - (args.strength || 0.45))
+                }
+            ]
+            payload.parameters.guidanceScale = args.strength && args.strength > 0.7 ? 90 : (args.strength ? (args.strength * 60) : 30)
         }
     } else {
         // Fallback for non-Imagen models (Gemini-3 / Nano Banana Pro)
@@ -200,23 +207,33 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         const isFood = category === "food"
         const isHighStrength = args.strength && args.strength > 0.7 && isArchitectural
 
-        const parts: any[] = [
-            {
+        const parts: any[] = []
+
+        if (imgB64) {
+            parts.push({
                 text: `TASK: Based on the provided "CONTEXT IMAGES" (Images 1+), fulfill this request: ${args.prompt.trim()}.
             
 INSTRUCTIONS:
 - Analyze all provided images to understand the desired style, layout, and materials.
 - Combine the elements into a cohesive new scene.
 - Be creative but realistic based on the visual evidence provided.`
-            },
-            { text: "IMAGE 1 (MAIN):" },
-            {
+            })
+            parts.push({ text: "IMAGE 1 (MAIN):" })
+            parts.push({
                 inlineData: {
                     mimeType: "image/jpeg",
                     data: imgB64,
                 },
-            }
-        ]
+            })
+        } else {
+            parts.push({
+                text: `TASK: Create an image based on this request: ${args.prompt.trim()}.
+            
+INSTRUCTIONS:
+- Generate a high-quality, professional image.
+- Be creative but realistic.`
+            })
+        }
 
         if (referenceImageParts.length > 0) {
             referenceImageParts.forEach((refPart, i) => {
@@ -253,7 +270,7 @@ INSTRUCTIONS:
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
-                    "X-Debug-Job-Id": args.imageUrl.split('/').pop() || "unknown",
+                    "X-Debug-Job-Id": args.imageUrl ? (args.imageUrl.split('/').pop() || "unknown") : `text-${Date.now()}`,
                 },
                 body: JSON.stringify(payload),
                 signal: controller.signal

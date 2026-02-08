@@ -1,7 +1,7 @@
 import sharp from "sharp"
 
 export type NanoBananaGenerateArgs = {
-  imageUrl: string
+  imageUrl?: string
   prompt: string
   strength: number
   rewrite: number
