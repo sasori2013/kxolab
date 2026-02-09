@@ -257,20 +257,27 @@ INSTRUCTIONS:
     }
 
     const controller = new AbortController()
-    // Standard timeout 240s (Safety cushion for Vercel 300s limit)
-    const TIMEOUT_MS = 240000
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    // Standard timeout 280s (Safety cushion for Vercel 300s limit)
+    const TIMEOUT_MS = 280000
+    const timeoutId = setTimeout(() => {
+        console.warn(`[Vertex AI] Global timeout reached (${TIMEOUT_MS}ms). Aborting request.`)
+        controller.abort()
+    }, TIMEOUT_MS)
 
     const apiStartTime = Date.now()
     let res: Response
     try {
         res = await withRetry(async () => {
+            const attemptStartTime = Date.now()
+            const attemptLabel = `Attempt ${Math.round((Date.now() - apiStartTime) / 1000)}s into job`
+            console.log(`[Vertex AI] Starting fetch... (${attemptLabel})`)
+
             const r = await fetch(endpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
-                    "X-Debug-Job-Id": args.imageUrl ? (args.imageUrl.split('/').pop() || "unknown") : `text-${Date.now()}`,
+                    "X-Debug-Job-Id": args.imageUrl ? (args.imageUrl.split('/').pop() || "unknown") : `txt-${args.prompt.slice(0, 10).replace(/\s/g, '_')}-${Date.now()}`,
                 },
                 body: JSON.stringify(payload),
                 signal: controller.signal
@@ -282,14 +289,15 @@ INSTRUCTIONS:
                 throw new Error(`Vertex AI error ${r.status}: ${text.slice(0, 200)}`)
             }
 
+            console.log(`[Vertex AI] Fetch returned status ${r.status} after ${Date.now() - attemptStartTime}ms`)
             return r
-        })
+        }, { startTime: apiStartTime })
     } finally {
         clearTimeout(timeoutId)
     }
 
     const apiDuration = Date.now() - apiStartTime
-    console.log(`[Vertex AI] API Call Finished. Status: ${res.status}, Duration: ${apiDuration}ms`)
+    console.log(`[Vertex AI] Pipeline Finished. Status: ${res.status}, Total Duration: ${apiDuration}ms`)
 
     const text = await res.text()
     console.log(`[Vertex AI] Response body received. Length: ${Math.round(text.length / 1024)}KB`)

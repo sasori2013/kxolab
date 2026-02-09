@@ -1207,9 +1207,9 @@ function SceneContent() {
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-[#00e08a]/30">
 
       <main className="relative min-h-screen flex flex-col">
-        {/* BACKGROUND LAYER: Immersive History Gallery */}
-        <div className="fixed inset-0 z-0 overflow-y-auto pt-4 pb-40 px-4 scroll-smooth no-scrollbar select-none pointer-events-none">
-          <div className="max-w-7xl mx-auto mb-10 pointer-events-auto flex justify-between items-center px-4">
+        {/* MAIN DISPLAY LAYER: Gallery */}
+        <div className="flex-1 overflow-y-auto pt-8 pb-40 px-4 scroll-smooth no-scrollbar">
+          <div className="max-w-7xl mx-auto mb-10 flex justify-between items-center px-4">
             <div className="flex items-center gap-3">
               <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
               <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.3</span>
@@ -1227,7 +1227,7 @@ function SceneContent() {
             {galleryResults.map((res, i) => (
               <div
                 key={res.id}
-                className="relative break-inside-avoid rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 mb-4 group pointer-events-auto cursor-zoom-in transition-all hover:scale-[1.02]"
+                className="relative break-inside-avoid rounded-xl overflow-hidden bg-neutral-900/50 border border-white/5 mb-4 group cursor-zoom-in transition-all hover:scale-[1.02]"
                 onClick={() => setSelectedGalleryImage(res.url)}
               >
                 {res.url ? (
@@ -1272,7 +1272,6 @@ function SceneContent() {
 
                 {/* ACTION BUTTONS (TOP RIGHT) */}
                 <div className="absolute top-2 right-2 z-10 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                  {/* Delete Button (X) */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1284,7 +1283,6 @@ function SceneContent() {
                     <span className="text-base leading-none">×</span>
                   </button>
 
-                  {/* Download Button */}
                   {res.url && (
                     <button
                       onClick={(e) => {
@@ -1314,106 +1312,92 @@ function SceneContent() {
           </div>
         </div>
 
-        {/* FLOATING ACTION LAYER: The Control Bar */}
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-5xl">
-          <div className="glass-dark rounded-[32px] p-2 flex flex-col md:flex-row items-center gap-2 shadow-2xl ring-1 ring-white/10">
+        {/* ACTION BAR: Now sticky at the top */}
+        <div className="sticky top-0 z-50 w-full bg-neutral-950/80 backdrop-blur-xl border-b border-white/5 py-4 px-4 shadow-xl">
+          <div className="max-w-5xl mx-auto flex flex-col items-center gap-4">
+            <div className="w-full flex flex-col md:flex-row items-center gap-3">
 
-            {/* LEFT: Image Picker & Main Thumb */}
-            <div className="flex items-center gap-2 p-1">
-              <div className={`relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border ${activePhoto?.preview ? 'border-[#d4ff00] shadow-[0_0_15px_rgba(212,255,0,0.3)]' : 'border-white/10'} group transition-all`}>
-                {activePhoto?.preview ? (
-                  <>
-                    <img
-                      src={activePhoto.preview}
-                      className="w-full h-full object-cover"
-                      alt="Input"
-                    />
-                    <div className="absolute top-1 left-1 z-10 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded tracking-tighter border border-white/10 uppercase">Main</div>
+              {/* LEFT: Image Picker & Main Thumb */}
+              <div className="flex items-center gap-2">
+                <div className={`relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border ${activePhoto?.preview ? 'border-[#d4ff00] shadow-[0_0_15px_rgba(212,255,0,0.3)]' : 'border-white/10'} group transition-all shrink-0`}>
+                  {activePhoto?.preview ? (
+                    <>
+                      <img
+                        src={activePhoto.preview}
+                        className="w-full h-full object-cover"
+                        alt="Input"
+                      />
+                      <div className="absolute top-1 left-1 z-10 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded tracking-tighter border border-white/10 uppercase">Main</div>
+                      <button
+                        onClick={() => handleDeletePhoto(activePhoto.id)}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                      >
+                        <span className="text-xl">×</span>
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => handleDeletePhoto(activePhoto.id)}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full h-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
                     >
-                      <span className="text-xl">×</span>
+                      <span className="text-2xl font-light">+</span>
                     </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
-                  >
-                    <span className="text-2xl font-light">+</span>
-                  </button>
-                )}
+                  )}
+                </div>
+
+                {/* Inspiration Slots (Small) */}
+                <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
+                  {photos.slice(1).map((photo, idx) => (
+                    <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
+                      <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[8px] font-bold px-1 rounded tracking-tighter border border-white/10">{String.fromCharCode(65 + idx)}</div>
+                      <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
+                      <button
+                        onClick={() => handleDeletePhoto(photo.id)}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {photos.length > 0 && photos.length < MAX_UPLOADS && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-10 h-10 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-neutral-600 hover:text-neutral-400 hover:border-white/20 transition-all"
+                    >
+                      <span className="text-sm">+</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Inspiration Slots (Small) */}
-              <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
-                {photos.slice(1).map((photo, idx) => (
-                  <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
-                    <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[8px] font-bold px-1 rounded tracking-tighter border border-white/10">{String.fromCharCode(65 + idx)}</div>
-                    <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
-                    <button
-                      onClick={() => handleDeletePhoto(photo.id)}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-xs"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                {photos.length > 0 && photos.length < MAX_UPLOADS && (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-10 h-10 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-neutral-600 hover:text-neutral-400 hover:border-white/20 transition-all"
-                  >
-                    <span className="text-sm">+</span>
-                  </button>
-                )}
-              </div>
-
-            </div>
-
-            {/* CENTER: Prompt Input */}
-            <div className="flex-1 w-full px-2">
-              <div className="md:col-span-12">
-                <label className="block text-[10px] font-bold tracking-[0.2em] text-neutral-500 uppercase mb-3 px-1">Concept Prompt</label>
+              {/* CENTER: Prompt Input */}
+              <div className="flex-1 w-full relative">
                 <textarea
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  placeholder="e.g. Minimalist japandi bedroom with natural oak wood, warm ambient lighting, and neutral linen textures..."
-                  className="w-full h-24 p-5 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#d4ff00]/40 focus:ring-1 focus:ring-[#d4ff00]/20 transition-all resize-none shadow-inner"
+                  placeholder="e.g. Minimalist japandi bedroom..."
+                  className="w-full h-14 md:h-14 p-4 pr-16 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#d4ff00]/40 focus:ring-1 focus:ring-[#d4ff00]/20 transition-all resize-none shadow-inner no-scrollbar"
                 />
-              </div>
-            </div>
-
-            {/* RIGHT: Settings & Generate */}
-            <div className="flex items-center gap-2 p-1">
-              {/* Setting Chips */}
-              <div className="flex items-center gap-1.5 px-2 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
-                <button
-                  onClick={() => setResolution(resolution === "2K" ? "4K" : "2K")}
-                  className="px-4 py-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[10px] font-bold text-neutral-400 uppercase tracking-widest"
-                >
-                  {resolution}
-                </button>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  <button
+                    onClick={() => setResolution(resolution === "2K" ? "4K" : "2K")}
+                    className="px-2 py-1 rounded-md bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-[8px] font-bold text-neutral-400 uppercase tracking-widest"
+                  >
+                    {resolution}
+                  </button>
+                </div>
               </div>
 
               {/* GENERATE BUTTON */}
               <button
                 onClick={generateForAll}
                 disabled={isGenerating || anyGenerating || anyUploading || (!activePhoto?.imageUrl && !customPrompt.trim())}
-                title={
-                  isGenerating ? "Processing local state..." :
-                    anyGenerating ? "A job is currently in progress..." :
-                      anyUploading ? "Uploading reference images..." :
-                        (!activePhoto?.imageUrl && !customPrompt.trim()) ? "Please upload an image or enter a prompt" : "Generate!"
-                }
-                className="h-14 px-8 bg-[#d4ff00] text-black rounded-3xl font-bold text-xs tracking-tight hover:bg-[#e6ff66] disabled:opacity-20 disabled:grayscale transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_30px_rgba(212,255,0,0.2)]"
+                className="h-14 px-6 bg-[#d4ff00] text-black rounded-2xl font-bold text-xs tracking-tight hover:bg-[#e6ff66] disabled:opacity-20 disabled:grayscale transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_30px_rgba(212,255,0,0.1)] shrink-0"
               >
                 {isGenerating || anyGenerating ? (
                   <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce" />
                     <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <span className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:0.4s]" />
                   </div>
                 ) : (
                   <>
@@ -1425,47 +1409,37 @@ function SceneContent() {
                 )}
               </button>
 
-              {/* EMERGENCY UNLOCK (Only if stuck) */}
-              {(isGenerating || anyGenerating) && (
-                <button
-                  onClick={forceUnlock}
-                  className="h-10 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-2xl font-bold text-[8px] uppercase tracking-widest transition-all border border-red-500/20 active:scale-95 flex items-center gap-1"
-                  title="Force unlock the generate button if it's stuck"
-                >
-                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-                    <path d="M8 11V7a4 4 0 118 0m-4 10v2m-6-10h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V13a2 2 0 012-2z" />
-                  </svg>
-                  <span>Force Unlock</span>
-                </button>
-              )}
+            </div>
 
-              {/* CLEAR ALL BUTTON */}
-              {photos.length > 0 && (
-                <button
-                  onClick={clearAll}
-                  className="h-14 px-5 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-3xl font-medium text-[10px] uppercase tracking-widest transition-all border border-white/5 active:scale-95"
-                >
-                  Reset Workspace
-                </button>
-              )}
+            {/* Status & Options Row */}
+            <div className="w-full flex items-center justify-between px-1">
+              <div className="flex items-center gap-4">
+                {(isGenerating || anyGenerating || error) && (
+                  <div className="flex items-center gap-2">
+                    {error ? (
+                      <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">{error}</span>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-[#d4ff00]/10 px-3 py-1 rounded-full border border-[#d4ff00]/20">
+                        <div className="w-1.5 h-1.5 bg-[#d4ff00] rounded-full animate-pulse" />
+                        <span className="text-[9px] font-bold text-[#d4ff00] uppercase tracking-widest">Processing...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {photos.length > 0 && (
+                  <button
+                    onClick={clearAll}
+                    className="text-[9px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-[0.2em]"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-
-          {/* Status/Error Toast Overlay (Keep this for feedback, but remove slide animation if it was here) */}
-          {(error || isGenerating || anyGenerating) && (
-            <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-fit px-6 py-2 glass rounded-full flex items-center gap-3 animate-in fade-in duration-300">
-              {error ? (
-                <span className="text-[10px] font-bold text-red-500 tracking-wider uppercase">{error}</span>
-              ) : (
-                <>
-                  <div className="w-2 h-2 bg-[#d4ff00] rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-neutral-400 tracking-[0.2em] uppercase">
-                    Processing...
-                  </span>
-                </>
-              )}
-            </div>
-          )}
         </div>
 
         {/* TOP LAYER: Latest Result Overlay / Modal View */}
