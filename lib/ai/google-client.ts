@@ -197,9 +197,12 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
                 }
             ]
             payload.parameters.guidanceScale = args.strength && args.strength > 0.7 ? 90 : (args.strength ? (args.strength * 60) : 30)
-            if (args.seed !== undefined) {
-                payload.parameters.seed = args.seed
-            }
+        }
+
+        // Move seed outside of imgB64 block so it applies to text-only too
+        // and ensure it is a validated integer for Vertex AI
+        if (args.seed !== undefined) {
+            payload.parameters.seed = Math.floor(Number(args.seed))
         }
     } else {
         // Fallback for non-Imagen models (Gemini-3 / Nano Banana Pro)
@@ -255,165 +258,176 @@ INSTRUCTIONS:
             generationConfig: {
                 temperature: Math.max(isHighStrength ? 1.0 : 0.7, args.temperature || 0.0),
                 maxOutputTokens: 2048,
-                seed: args.seed // Gemini seed support
+                seed: args.seed !== undefined ? Math.floor(Number(args.seed)) : undefined // Gemini seed support
             }
         }
+
+        // Log request payload for debugging (omitting base64 for brevity)
+        console.log(`[Vertex AI Request] ${model} payload:`, JSON.stringify({
+            ...payload,
+            instances: payload.instances?.map((inst: any) => ({ ...inst, image: inst.image ? "[IMAGE_BASE64]" : undefined })),
+            contents: payload.contents?.map((cont: any) => ({
+                ...cont,
+                parts: cont.parts?.map((p: any) => p.inlineData ? { ...p, inlineData: { ...p.inlineData, data: "[IMAGE_BASE64]" } } : p)
+            }))
+        }, null, 2))
     }
+}
 
-    const controller = new AbortController()
-    // Standard timeout 280s (Safety cushion for Vercel 300s limit)
-    const TIMEOUT_MS = 280000
-    const timeoutId = setTimeout(() => {
-        console.warn(`[Vertex AI] Global timeout reached (${TIMEOUT_MS}ms). Aborting request.`)
-        controller.abort()
-    }, TIMEOUT_MS)
+const controller = new AbortController()
+// Standard timeout 280s (Safety cushion for Vercel 300s limit)
+const TIMEOUT_MS = 280000
+const timeoutId = setTimeout(() => {
+    console.warn(`[Vertex AI] Global timeout reached (${TIMEOUT_MS}ms). Aborting request.`)
+    controller.abort()
+}, TIMEOUT_MS)
 
-    // 3. Request Generation
-    const apiStartTime = Date.now()
-    let res: Response
+// 3. Request Generation
+const apiStartTime = Date.now()
+let res: Response
+try {
+    res = await withRetry(async () => {
+        const attemptStartTime = Date.now()
+        const attemptLabel = `Attempt ${Math.round((Date.now() - apiStartTime) / 1000)}s into job`
+        console.log(`[Vertex AI] Starting fetch... (${attemptLabel})`)
+
+        const r = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                "X-Debug-Job-Id": args.imageUrl ? (args.imageUrl.split('/').pop() || "unknown") : `txt-${args.prompt.slice(0, 10).replace(/\s/g, '_')}-${Date.now()}`,
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        })
+
+        // If it's a 429 or 5xx, throw so withRetry catches it
+        if (r.status === 429 || r.status >= 500) {
+            const text = await r.text()
+            throw new Error(`Vertex AI error ${r.status}: ${text.slice(0, 200)}`)
+        }
+
+        console.log(`[Vertex AI] Fetch returned status ${r.status} after ${Date.now() - attemptStartTime}ms`)
+        return r
+    }, { startTime: apiStartTime })
+} finally {
+    clearTimeout(timeoutId)
+}
+
+const apiDuration = Date.now() - apiStartTime
+console.log(`[Vertex AI] Pipeline Finished. Status: ${res.status}, Total Duration: ${apiDuration}ms`)
+
+const text = await res.text()
+console.log(`[Vertex AI] Response body received. Length: ${Math.round(text.length / 1024)}KB`)
+
+let json: any = null
+try {
+    json = JSON.parse(text)
+} catch {
+    return { ok: false, error: `Vertex AI non-JSON response: ${res.status}`, raw: text.slice(0, 1000) }
+}
+
+if (!res.ok) {
+    const errDetail = json?.error?.message || JSON.stringify(json)
+    return { ok: false, error: `Vertex AI error ${res.status}: ${errDetail}`, raw: json }
+}
+
+let foundB64: string | undefined
+let foundMime: string = "image/png"
+
+if (isImagen) {
+    if (json.predictions && json.predictions[0]?.bytesBase64Encoded) {
+        foundB64 = json.predictions[0].bytesBase64Encoded
+        foundMime = json.predictions[0].mimeType || "image/png"
+    }
+} else {
+    const cand = json?.candidates?.[0]
+    const parts = cand?.content?.parts ?? []
+    for (const p of parts) {
+        if (p?.inlineData?.data) {
+            foundB64 = p.inlineData.data
+            foundMime = p.inlineData.mimeType || "image/png"
+            break
+        }
+    }
+}
+
+if (!foundB64) {
+    console.error("[Nanobanana] No image data found. Full Response:", JSON.stringify(json, null, 2))
+    const candidate = json?.candidates?.[0]
+    if (candidate?.finishReason) {
+        let msg = `Generation stop: ${candidate.finishReason}`
+        if (candidate.safetyRatings) {
+            const blocked = candidate.safetyRatings.find((r: any) => r.probability !== "NEGLIGIBLE" && r.probability !== "LOW")
+            if (blocked) msg += ` (${blocked.category})`
+        }
+        return { ok: false, error: msg, raw: json }
+    }
+    return { ok: false, error: "No image data in response", raw: json }
+}
+
+// --- UPSCALING (Native Vertex AI) ---
+if (args.resolution === "2K" || args.resolution === "4K") {
+    console.log(`[Vertex AI] Upscaling requested: ${args.resolution}`)
     try {
-        res = await withRetry(async () => {
-            const attemptStartTime = Date.now()
-            const attemptLabel = `Attempt ${Math.round((Date.now() - apiStartTime) / 1000)}s into job`
-            console.log(`[Vertex AI] Starting fetch... (${attemptLabel})`)
+        const upscaleFactor = args.resolution === "4K" ? "x4" : "x2"
 
-            const r = await fetch(endpoint, {
+        // image-upscaling-001 is most stable in us-central1
+        const upscaleLocation = "us-central1"
+        const upscaleEndpoint = `https://${upscaleLocation}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${upscaleLocation}/publishers/google/models/image-upscaling-001:predict`
+
+        const upscalePayload = {
+            instances: [
+                {
+                    image: { bytesBase64Encoded: foundB64 }
+                }
+            ],
+            parameters: {
+                upscaleFactor: upscaleFactor
+            }
+        }
+
+        console.log(`[Vertex AI] Calling Upscaler (${upscaleFactor})...`)
+        const upscaleRes = await withRetry(async () => {
+            const r = await fetch(upscaleEndpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
-                    "X-Debug-Job-Id": args.imageUrl ? (args.imageUrl.split('/').pop() || "unknown") : `txt-${args.prompt.slice(0, 10).replace(/\s/g, '_')}-${Date.now()}`,
                 },
-                body: JSON.stringify(payload),
-                signal: controller.signal
+                body: JSON.stringify(upscalePayload),
             })
 
-            // If it's a 429 or 5xx, throw so withRetry catches it
             if (r.status === 429 || r.status >= 500) {
                 const text = await r.text()
-                throw new Error(`Vertex AI error ${r.status}: ${text.slice(0, 200)}`)
+                throw new Error(`Vertex AI Upscale error ${r.status}: ${text.slice(0, 200)}`)
             }
-
-            console.log(`[Vertex AI] Fetch returned status ${r.status} after ${Date.now() - attemptStartTime}ms`)
             return r
-        }, { startTime: apiStartTime })
-    } finally {
-        clearTimeout(timeoutId)
-    }
+        }, { startTime: Date.now() }) // Fresh start for upscale retry
 
-    const apiDuration = Date.now() - apiStartTime
-    console.log(`[Vertex AI] Pipeline Finished. Status: ${res.status}, Total Duration: ${apiDuration}ms`)
-
-    const text = await res.text()
-    console.log(`[Vertex AI] Response body received. Length: ${Math.round(text.length / 1024)}KB`)
-
-    let json: any = null
-    try {
-        json = JSON.parse(text)
-    } catch {
-        return { ok: false, error: `Vertex AI non-JSON response: ${res.status}`, raw: text.slice(0, 1000) }
-    }
-
-    if (!res.ok) {
-        const errDetail = json?.error?.message || JSON.stringify(json)
-        return { ok: false, error: `Vertex AI error ${res.status}: ${errDetail}`, raw: json }
-    }
-
-    let foundB64: string | undefined
-    let foundMime: string = "image/png"
-
-    if (isImagen) {
-        if (json.predictions && json.predictions[0]?.bytesBase64Encoded) {
-            foundB64 = json.predictions[0].bytesBase64Encoded
-            foundMime = json.predictions[0].mimeType || "image/png"
-        }
-    } else {
-        const cand = json?.candidates?.[0]
-        const parts = cand?.content?.parts ?? []
-        for (const p of parts) {
-            if (p?.inlineData?.data) {
-                foundB64 = p.inlineData.data
-                foundMime = p.inlineData.mimeType || "image/png"
-                break
-            }
-        }
-    }
-
-    if (!foundB64) {
-        console.error("[Nanobanana] No image data found. Full Response:", JSON.stringify(json, null, 2))
-        const candidate = json?.candidates?.[0]
-        if (candidate?.finishReason) {
-            let msg = `Generation stop: ${candidate.finishReason}`
-            if (candidate.safetyRatings) {
-                const blocked = candidate.safetyRatings.find((r: any) => r.probability !== "NEGLIGIBLE" && r.probability !== "LOW")
-                if (blocked) msg += ` (${blocked.category})`
-            }
-            return { ok: false, error: msg, raw: json }
-        }
-        return { ok: false, error: "No image data in response", raw: json }
-    }
-
-    // --- UPSCALING (Native Vertex AI) ---
-    if (args.resolution === "2K" || args.resolution === "4K") {
-        console.log(`[Vertex AI] Upscaling requested: ${args.resolution}`)
-        try {
-            const upscaleFactor = args.resolution === "4K" ? "x4" : "x2"
-
-            // image-upscaling-001 is most stable in us-central1
-            const upscaleLocation = "us-central1"
-            const upscaleEndpoint = `https://${upscaleLocation}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${upscaleLocation}/publishers/google/models/image-upscaling-001:predict`
-
-            const upscalePayload = {
-                instances: [
-                    {
-                        image: { bytesBase64Encoded: foundB64 }
-                    }
-                ],
-                parameters: {
-                    upscaleFactor: upscaleFactor
-                }
-            }
-
-            console.log(`[Vertex AI] Calling Upscaler (${upscaleFactor})...`)
-            const upscaleRes = await withRetry(async () => {
-                const r = await fetch(upscaleEndpoint, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify(upscalePayload),
-                })
-
-                if (r.status === 429 || r.status >= 500) {
-                    const text = await r.text()
-                    throw new Error(`Vertex AI Upscale error ${r.status}: ${text.slice(0, 200)}`)
-                }
-                return r
-            }, { startTime: Date.now() }) // Fresh start for upscale retry
-
-            if (upscaleRes.ok) {
-                const upscaleJson = await upscaleRes.json()
-                if (upscaleJson.predictions && upscaleJson.predictions[0]?.bytesBase64Encoded) {
-                    console.log(`[Vertex AI] Upscale Success (${args.resolution})`)
-                    foundB64 = upscaleJson.predictions[0].bytesBase64Encoded
-                    // Upscaler usually returns same mime as input or png
-                } else {
-                    console.warn("[Vertex AI] Upscale returned no data, falling back to original.")
-                }
+        if (upscaleRes.ok) {
+            const upscaleJson = await upscaleRes.json()
+            if (upscaleJson.predictions && upscaleJson.predictions[0]?.bytesBase64Encoded) {
+                console.log(`[Vertex AI] Upscale Success (${args.resolution})`)
+                foundB64 = upscaleJson.predictions[0].bytesBase64Encoded
+                // Upscaler usually returns same mime as input or png
             } else {
-                console.warn(`[Vertex AI] Upscale failed (${upscaleRes.status}), falling back to original.`)
+                console.warn("[Vertex AI] Upscale returned no data, falling back to original.")
             }
-        } catch (e) {
-            console.error("[Vertex AI] Upscale process failed:", e)
-            // Fallback to original image
+        } else {
+            console.warn(`[Vertex AI] Upscale failed (${upscaleRes.status}), falling back to original.`)
         }
+    } catch (e) {
+        console.error("[Vertex AI] Upscale process failed:", e)
+        // Fallback to original image
     }
+}
 
-    return {
-        ok: true,
-        imageBase64: foundB64,
-        mimeType: foundMime,
-        raw: json // Keep original generation raw for debugging
-    }
+return {
+    ok: true,
+    imageBase64: foundB64,
+    mimeType: foundMime,
+    raw: json // Keep original generation raw for debugging
+}
 }
