@@ -217,14 +217,15 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
 
         if (imgB64) {
             parts.push({
-                text: `TASK: Based on the provided "CONTEXT IMAGES" (Images 1+), fulfill this request: ${args.prompt.trim()}.
+                text: `TASK: Use IMAGE 1 (MAIN) as the absolute structural and visual foundation. Subtly incorporate elements, style, or subjects from the provided REFERENCE IMAGES (Images 2+) into this scene.
             
 INSTRUCTIONS:
-- Analyze all provided images to understand the desired style, layout, and materials.
-- Combine the elements into a cohesive new scene.
-- Be creative but realistic based on the visual evidence provided.`
+- CRITICAL: Maintain the EXACT composition, camera perspective, furniture layout, and architectural structure of IMAGE 1.
+- LIGHTING & COLOR: Match all added elements to IMAGE 1's light source direction, color temperature, and shadows. Ensure natural blending (light wrap, ambient occlusion).
+- RATIO: Strictly respect the framing and aspect ratio of IMAGE 1.
+- REQUEST: ${args.prompt.trim() || "Enhance and realistically modify this scene based on references."}`
             })
-            parts.push({ text: "IMAGE 1 (MAIN):" })
+            parts.push({ text: "IMAGE 1 (MAIN - DO NOT CHANGE STRUCTURE):" })
             parts.push({
                 inlineData: {
                     mimeType: "image/jpeg",
@@ -237,7 +238,7 @@ INSTRUCTIONS:
             
 INSTRUCTIONS:
 - Generate a high-quality, professional image.
-- Be creative but realistic.`
+- If REFERENCE IMAGES are provided, use them for style and subject guidance.`
             })
         }
 

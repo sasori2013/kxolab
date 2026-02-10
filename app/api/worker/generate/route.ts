@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
 
         // --- ENHANCEMENT ---
         await updateProgress("generating")
-        enhancementPrompt = body.body?.prompt || "Standard professional portrait"
+        const defaultPrompt = imageUrl ? "Enhance and realistically modify this scene" : "Standard professional portrait"
+        enhancementPrompt = body.body?.prompt || defaultPrompt
 
         console.log(`[Worker Job ${jobId}] Calling nanoBananaGenerate with seed: ${currentMetadata.seed}...`)
         const enhancementRes = await nanoBananaGenerate({
