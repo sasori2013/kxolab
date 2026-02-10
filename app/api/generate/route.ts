@@ -165,16 +165,22 @@ export async function POST(req: Request) {
 
     const { data: cachedJob } = await adminClient
       .from('jobs')
-      .select('id, result_url')
-      .eq('status', 'completed')
+      .select('id, status, result_url')
+      .in('status', ['completed', 'processing', 'retrying'])
       .eq('execution_metadata->>content_hash', contentHash)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
     if (cachedJob) {
-      console.log(`[Generate API] Cache Hit: ${contentHash} -> ${cachedJob.id}`)
-      return NextResponse.json({ ok: true, jobId: cachedJob.id, resultUrl: cachedJob.result_url, cached: true })
+      console.log(`[Generate API] Content Match Found: ${contentHash} -> ${cachedJob.id} (${cachedJob.status})`)
+      return NextResponse.json({
+        ok: true,
+        jobId: cachedJob.id,
+        status: cachedJob.status,
+        resultUrl: cachedJob.status === 'completed' ? cachedJob.result_url : undefined,
+        cached: true
+      })
     }
 
     // DYNAMIC PROMPT CONSTRUCTION

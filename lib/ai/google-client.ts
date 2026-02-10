@@ -305,7 +305,12 @@ INSTRUCTIONS:
             // If it's a 429 or 5xx, throw so withRetry catches it
             if (r.status === 429 || r.status >= 500) {
                 const text = await r.text()
-                throw new Error(`Vertex AI error ${r.status}: ${text.slice(0, 200)}`)
+                let detail = text
+                try {
+                    const errJson = JSON.parse(text)
+                    detail = errJson?.error?.message || errJson?.message || text
+                } catch { }
+                throw new Error(`Vertex AI error ${r.status}: ${detail.slice(0, 250)}`)
             }
 
             console.log(`[Vertex AI] Fetch returned status ${r.status} after ${Date.now() - attemptStartTime}ms`)

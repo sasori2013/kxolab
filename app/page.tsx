@@ -229,11 +229,11 @@ function ResultGallery({
                 ) : res.status === "generating" || res.status === "queued" || res.status === "retrying" ? (
                   <div className="h-80 md:h-[70vh] flex flex-col items-center justify-center text-sm text-neutral-400 animate-pulse bg-neutral-50 px-8 text-center italic">
                     <span className="tracking-widest uppercase text-[10px] mb-2 font-bold not-italic">
-                      {res.isCoolingDown || res.status === 'retrying' ? "Wait to retry" : (res.status === "queued" ? "In Queue" : "Processing")}
+                      {res.status === 'retrying' || res.isCoolingDown ? "AI Busy (Retrying)" : (res.status === "queued" ? "In Queue" : "Processing")}
                     </span>
-                    {res.isCoolingDown || res.status === 'retrying' ? (
+                    {res.status === 'retrying' || res.isCoolingDown ? (
                       <span className="text-amber-500 text-[11px] font-medium leading-relaxed">
-                        Vertex AI busy. Waiting to retry...<br />
+                        Vertex AI rate limit reached. Waiting for availability...<br />
                         <span className="text-[10px] opacity-70">(Attempt #{res.retryCount || 1})</span>
                       </span>
                     ) : (
@@ -1519,7 +1519,9 @@ function SceneContent() {
                     ) : (
                       <div className="flex items-center gap-2 bg-[#d4ff00]/10 px-3 py-1 rounded-full border border-[#d4ff00]/20">
                         <div className="w-1.5 h-1.5 bg-[#d4ff00] rounded-full animate-pulse" />
-                        <span className="text-[9px] font-bold text-[#d4ff00] uppercase tracking-widest">Processing...</span>
+                        <span className="text-[9px] font-bold text-[#d4ff00] uppercase tracking-widest">
+                          {photos.some(p => p.results.some(r => r.status === 'retrying')) ? "AI Quota Full - Retrying..." : "Processing..."}
+                        </span>
                       </div>
                     )}
                   </div>
