@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { useSearchParams } from "next/navigation"
 
 // Multi-slot implementation
-type SlotStatus = "idle" | "queued" | "generating" | "done" | "error" | "failed" | "retrying"
+type SlotStatus = "idle" | "queued" | "generating" | "done" | "error" | "failed" | "retrying" | "processing"
 type PhotoStatus = "ready" | "uploading" | "uploaded" | "error" | "failed" | "generating" | "done"
 
 interface OutputSlot {
