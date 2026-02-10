@@ -30,6 +30,7 @@ type GenerateReq = {
   resolution?: "2K" | "4K"
   aspectRatio?: string
   referenceImageUrls?: string[]
+  seed?: number
 }
 
 
@@ -131,8 +132,21 @@ export async function POST(req: Request) {
 
     // 0.5 IDEMPOTENCY & CACHE CHECK
     const idempotencyKey = safeString(body.idempotencyKey)
+
+    // Generate a random seed if not provided (Gemini/Imagen uint32 range)
+    const seed = body.seed !== undefined ? Number(body.seed) : Math.floor(Math.random() * 2147483647)
+
     const contentHash = crypto.createHash("sha256")
-      .update(JSON.stringify({ imageUrl, prompt: body.prompt, category: body.category, strength: body.strength }))
+      .update(JSON.stringify({
+        imageUrl,
+        prompt: body.prompt,
+        category: body.category,
+        strength: body.strength,
+        seed, // Now includes seed in hash
+        resolution: body.resolution,
+        aspectRatio: body.aspectRatio,
+        referenceImageUrls: body.referenceImageUrls
+      }))
       .digest("hex")
 
     if (idempotencyKey) {
@@ -226,7 +240,8 @@ export async function POST(req: Request) {
           worker_url: workerUrl,
           host_header: host,
           app_url_env: process.env.APP_URL ? "set" : "missing",
-          is_preview: isPreview
+          is_preview: isPreview,
+          seed // Save seed for debugging and worker access
         }
       })
       .eq('id', jobId)

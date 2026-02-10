@@ -197,6 +197,9 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
                 }
             ]
             payload.parameters.guidanceScale = args.strength && args.strength > 0.7 ? 90 : (args.strength ? (args.strength * 60) : 30)
+            if (args.seed !== undefined) {
+                payload.parameters.seed = args.seed
+            }
         }
     } else {
         // Fallback for non-Imagen models (Gemini-3 / Nano Banana Pro)
@@ -252,6 +255,7 @@ INSTRUCTIONS:
             generationConfig: {
                 temperature: Math.max(isHighStrength ? 1.0 : 0.7, args.temperature || 0.0),
                 maxOutputTokens: 2048,
+                seed: args.seed // Gemini seed support
             }
         }
     }
@@ -264,6 +268,7 @@ INSTRUCTIONS:
         controller.abort()
     }, TIMEOUT_MS)
 
+    // 3. Request Generation
     const apiStartTime = Date.now()
     let res: Response
     try {
@@ -348,10 +353,67 @@ INSTRUCTIONS:
         return { ok: false, error: "No image data in response", raw: json }
     }
 
+    // --- UPSCALING (Native Vertex AI) ---
+    if (args.resolution === "2K" || args.resolution === "4K") {
+        console.log(`[Vertex AI] Upscaling requested: ${args.resolution}`)
+        try {
+            const upscaleFactor = args.resolution === "4K" ? "x4" : "x2"
+
+            // image-upscaling-001 is most stable in us-central1
+            const upscaleLocation = "us-central1"
+            const upscaleEndpoint = `https://${upscaleLocation}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${upscaleLocation}/publishers/google/models/image-upscaling-001:predict`
+
+            const upscalePayload = {
+                instances: [
+                    {
+                        image: { bytesBase64Encoded: foundB64 }
+                    }
+                ],
+                parameters: {
+                    upscaleFactor: upscaleFactor
+                }
+            }
+
+            console.log(`[Vertex AI] Calling Upscaler (${upscaleFactor})...`)
+            const upscaleRes = await withRetry(async () => {
+                const r = await fetch(upscaleEndpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(upscalePayload),
+                })
+
+                if (r.status === 429 || r.status >= 500) {
+                    const text = await r.text()
+                    throw new Error(`Vertex AI Upscale error ${r.status}: ${text.slice(0, 200)}`)
+                }
+                return r
+            }, { startTime: Date.now() }) // Fresh start for upscale retry
+
+            if (upscaleRes.ok) {
+                const upscaleJson = await upscaleRes.json()
+                if (upscaleJson.predictions && upscaleJson.predictions[0]?.bytesBase64Encoded) {
+                    console.log(`[Vertex AI] Upscale Success (${args.resolution})`)
+                    foundB64 = upscaleJson.predictions[0].bytesBase64Encoded
+                    // Upscaler usually returns same mime as input or png
+                } else {
+                    console.warn("[Vertex AI] Upscale returned no data, falling back to original.")
+                }
+            } else {
+                console.warn(`[Vertex AI] Upscale failed (${upscaleRes.status}), falling back to original.`)
+            }
+        } catch (e) {
+            console.error("[Vertex AI] Upscale process failed:", e)
+            // Fallback to original image
+        }
+    }
+
     return {
         ok: true,
         imageBase64: foundB64,
         mimeType: foundMime,
-        raw: json
+        raw: json // Keep original generation raw for debugging
     }
 }

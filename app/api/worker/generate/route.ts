@@ -51,9 +51,10 @@ export async function POST(req: NextRequest) {
             prompt: enhancementPrompt,
             strength: body.body?.strength ?? 0.45,
             rewrite: body.body?.rewrite ?? 1,
-            resolution: body.body?.resolution || '2K',
+            resolution: body.body?.resolution, // Remove default '2K' to allow native resolution
             aspectRatio: body.body?.aspectRatio || '1:1',
-            referenceImageUrls: body.referenceImageUrls || []
+            referenceImageUrls: body.referenceImageUrls || [],
+            seed: currentMetadata.seed // Pass the randomized seed
         })
 
         if (!enhancementRes.ok) throw new Error(`Generation failed: ${enhancementRes.error}`)
