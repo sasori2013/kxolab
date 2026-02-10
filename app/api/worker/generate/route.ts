@@ -208,19 +208,23 @@ export async function POST(req: NextRequest) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
         const isTimeout = e.message?.includes("aborted") || e.message?.includes("timeout") || e.message?.includes("AbortError")
         const isRetryable = e.message?.includes("429") || e.message?.includes("exhausted") || e.message?.includes("rate limit")
+        const isDev = process.env.NODE_ENV === 'development'
 
         await adminClient
             .from('jobs')
             .update({
-                status: isRetryable ? 'retrying' : 'failed',
-                error: e.message,
+                // In local dev, there is no background retry mechanism (QStash), 
+                // so we set to failed to avoid UI hang unless it's a transient 5xx
+                status: (isRetryable && !isDev) ? 'retrying' : 'failed',
+                error: (isRetryable && isDev) ? `AI Quota Reached (Local Dev). Please try again in 1-2 minutes.` : e.message,
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,
                     final_prompt: enhancementPrompt,
                     error_at: new Date().toISOString(),
                     terminal_failure: isTimeout,
-                    is_retryable: isRetryable
+                    is_retryable: isRetryable,
+                    is_dev_fail: isDev && isRetryable
                 }
             })
             .eq('id', jobId)

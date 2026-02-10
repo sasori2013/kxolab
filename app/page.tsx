@@ -448,19 +448,14 @@ function SceneContent() {
     const isAny = photos.some(p => {
       // Check results first
       const hasActiveResult = p.results.some(r => {
-        const isActiveStatus = r.status === "generating" || r.status === "queued" || r.status === "retrying"
+        const isActiveStatus = r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "processing"
         if (!isActiveStatus) return false
 
-        // Safety check: if the job is older than 5 minutes, it's probably stuck.
-        // If updatedAt is missing (0), assume it's NOT stuck unless we have a reason to believe it started long ago.
-        // Actually, fallback to a "recent enough" timestamp if missing is safest to let it try.
+        // Safety check: if the job is older than 5 minutes, it's definitely stuck.
         const startTime = r.updatedAt || 0
         const now = Date.now()
 
-        if (startTime === 0) {
-          // If no timestamp, we assume it's NOT stuck for now (letting polling work)
-          return true
-        }
+        if (startTime === 0) return true // Let it start
 
         const isStuck = now - startTime > 5 * 60 * 1000
         return !isStuck
@@ -468,11 +463,11 @@ function SceneContent() {
 
       if (hasActiveResult) return true
 
-      // If photo itself is "generating" but has no active results, it might be stuck.
-      return p.status === "generating"
+      // Photo status should not lock the UI forever if results are finished or stuck
+      return false
     })
 
-    if (isAny) console.log("[UI] anyGenerating is TRUE. Reason:", photos.map(p => `${p.id}: ${p.status} (results: ${p.results.length})`))
+    if (isAny) console.log("[UI] anyGenerating is TRUE.")
     return isAny
   }, [photos])
 
@@ -1523,6 +1518,16 @@ function SceneContent() {
                           {photos.some(p => p.results.some(r => r.status === 'retrying')) ? "AI Quota Full - Retrying..." : "Processing..."}
                         </span>
                       </div>
+                    )}
+
+                    {/* EMERGENCY UNLOCK */}
+                    {(isGenerating || anyGenerating) && (
+                      <button
+                        onClick={forceUnlock}
+                        className="text-[8px] font-bold text-white/30 hover:text-red-400 transition-colors uppercase ml-2 tracking-widest"
+                      >
+                        Force Unlock
+                      </button>
                     )}
                   </div>
                 )}
