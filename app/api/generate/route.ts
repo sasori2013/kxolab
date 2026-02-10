@@ -103,17 +103,23 @@ export async function POST(req: Request) {
   console.log(">>> [API] POST /api/generate started")
   try {
     const bodyStr = await req.text()
-    console.log(">>> [API] Request Body String:", bodyStr)
-    const body = JSON.parse(bodyStr) as GenerateReq
+    let body: GenerateReq
+    try {
+      body = JSON.parse(bodyStr)
+    } catch (parseError: any) {
+      console.error(">>> [API] JSON Parse Error:", parseError.message, "Body starts with:", bodyStr.slice(0, 100))
+      return NextResponse.json({ ok: false, error: "Invalid JSON body: " + parseError.message }, { status: 400 })
+    }
+
     console.log(">>> [API] Incoming Generate Request:", {
       imageUrl: body.imageUrl,
       prompt: body.prompt,
       resolution: body.resolution,
-      aspectRatio: body.aspectRatio
+      aspectRatio: body.aspectRatio,
+      seed: body.seed
     })
     const imageUrl = safeString(body.imageUrl)
     const prompt = safeString(body.prompt)
-    const debug = Boolean(body.debug)
 
     if (!imageUrl && !prompt) return NextResponse.json({ ok: false, error: "imageUrl or prompt is required" }, { status: 400 })
 
@@ -121,8 +127,11 @@ export async function POST(req: Request) {
 
     // 0. SUPABASE CLIENT
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    let userId = user?.id || null
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) {
+      console.warn("[Generate API] Auth Error (continuing as guest):", authError.message)
+    }
+    const userId = authData?.user?.id || null
 
     console.log(`[Generate API] Request from ${userId ? "user: " + userId : "anonymous guest"}`)
 
@@ -142,7 +151,7 @@ export async function POST(req: Request) {
         prompt: body.prompt,
         category: body.category,
         strength: body.strength,
-        seed, // Now includes seed in hash
+        seed,
         resolution: body.resolution,
         aspectRatio: body.aspectRatio,
         referenceImageUrls: body.referenceImageUrls
@@ -298,7 +307,8 @@ export async function POST(req: Request) {
     })
 
   } catch (e: any) {
-    console.error("Generate API Error:", e)
-    return NextResponse.json({ ok: false, error: e?.message ?? "generate failed" }, { status: 500 })
+    console.error(">>> [API] Generate API Error:", e)
+    console.error(">>> [API] Stack Trace:", e.stack)
+    return NextResponse.json({ ok: false, error: e?.message ?? "generate failed", stack: e.stack }, { status: 500 })
   }
 }

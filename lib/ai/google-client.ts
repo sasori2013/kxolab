@@ -24,10 +24,15 @@ async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, 
             const elapsed = Date.now() - startTime
             const isLastTry = i === maxTries - 1
             const msg = String(e?.message || "")
-            const isRetryable = /429|resource exhausted|rate limit|quota|limit|503|502|server error/i.test(msg)
+            const is429 = /429|resource exhausted|rate limit|quota/i.test(msg)
+            const isRetryable = is429 || /limit|503|502|server error/i.test(msg)
+
+            // If it's a 429, we might want to wait longer initially
+            if (i === 0 && is429 && !options.initialDelay) {
+                delay = 10000
+            }
 
             // If we are getting close to the 5-minute mark, don't try again.
-            // Better to fail with 240s timeout than be killed by Vercel at 300s.
             const tooCloseToDeadline = elapsed + (delay * 1.5) > VERCEL_DEADLINE_MS
 
             if (!isRetryable || isLastTry || tooCloseToDeadline) {
@@ -72,8 +77,8 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         try {
             const creds = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
             authOptions.credentials = creds
-        } catch (e) {
-            console.error("Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON", e)
+        } catch (e: any) {
+            console.error("Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON in google-client. Check for extra quotes or malformed JSON.", e.message)
         }
     }
 

@@ -9,7 +9,14 @@ export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
     const startTime = Date.now()
-    const body = await req.json()
+    let body: any
+    try {
+        body = await req.json()
+    } catch (e: any) {
+        console.error(">>> [Worker] Failed to parse request body:", e.message)
+        return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 })
+    }
+
     const { jobId, sessionId, imageUrl } = body
     let currentMetadata: any = {}
     let enhancementPrompt = ""
@@ -18,13 +25,17 @@ export async function POST(req: NextRequest) {
         if (!jobId) throw new Error("Missing jobId")
 
         // Fetch current job for initial metadata
-        const { data: job } = await adminClient
+        const { data: job, error: fetchErr } = await adminClient
             .from('jobs')
             .select('*')
             .eq('id', jobId)
             .single()
 
-        currentMetadata = job?.execution_metadata || {}
+        if (fetchErr || !job) {
+            throw new Error(`Failed to fetch job ${jobId}: ${fetchErr?.message || "Not found"}`)
+        }
+
+        currentMetadata = job.execution_metadata || {}
 
         const updateProgress = async (status: string, metadataUpdates: any = {}) => {
             currentMetadata = {
@@ -32,14 +43,19 @@ export async function POST(req: NextRequest) {
                 ...metadataUpdates,
                 steps: [...(currentMetadata.steps || []), { name: status, start: Date.now() }]
             }
-            await adminClient
-                .from('jobs')
-                .update({
-                    status,
-                    updated_at: new Date().toISOString(),
-                    execution_metadata: currentMetadata
-                })
-                .eq('id', jobId)
+            try {
+                const { error: upErr } = await adminClient
+                    .from('jobs')
+                    .update({
+                        status,
+                        updated_at: new Date().toISOString(),
+                        execution_metadata: currentMetadata
+                    })
+                    .eq('id', jobId)
+                if (upErr) console.error(`[Worker Job ${jobId}] Failed to update status to ${status}:`, upErr.message)
+            } catch (upCatch: any) {
+                console.error(`[Worker Job ${jobId}] Exception during status update ${status}:`, upCatch.message)
+            }
         }
 
         // --- ENHANCEMENT ---

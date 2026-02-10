@@ -26,11 +26,19 @@ import { GoogleAuth } from 'google-auth-library'
 async function getAccessToken(): Promise<string> {
     const projectId = process.env.GOOGLE_VERTEX_PROJECT_ID
     const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+    let credentials
+    if (credentialsJson) {
+        try {
+            credentials = JSON.parse(credentialsJson)
+        } catch (e) {
+            console.error("Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON in gemini-client", e)
+        }
+    }
 
     const auth = new GoogleAuth({
         scopes: ["https://www.googleapis.com/auth/cloud-platform"],
         projectId,
-        credentials: credentialsJson ? JSON.parse(credentialsJson) : undefined,
+        credentials,
     })
     const client = await auth.getClient()
     const token = await client.getAccessToken()
