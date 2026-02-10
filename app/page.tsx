@@ -330,6 +330,7 @@ function SceneContent() {
   const [customPrompt, setCustomPrompt] = useState("")
   const [resolution, setResolution] = useState<"2K" | "4K">("2K")
   const [aspectRatio, setAspectRatio] = useState("original")
+  const [replacingIndex, setReplacingIndex] = useState<number | null>(null)
 
   // --- SESSION PERSISTENCE (Load) ---
   useEffect(() => {
@@ -905,16 +906,24 @@ function SceneContent() {
             ? `/api/thumbnail?url=${encodeURIComponent(imageUrl)}`
             : imageUrl
 
-          updatePhoto(photoId, {
-            status: "uploaded",
-            imageUrl,
-            preview: previewUrl,
-            category,
-            visualStrategy,
-            brightness,
-            people,
-            tilt,
-            uploadError: undefined
+          setPhotos((currentPhotos) => {
+            const index = currentPhotos.findIndex(p => p.id === photoId)
+            if (index === -1) return currentPhotos
+
+            const updated = [...currentPhotos]
+            updated[index] = {
+              ...updated[index],
+              status: "uploaded",
+              imageUrl,
+              preview: previewUrl,
+              category: category || updated[index].category,
+              visualStrategy,
+              brightness,
+              people,
+              tilt,
+              uploadError: undefined
+            }
+            return updated
           })
         } catch (e: any) {
           updatePhoto(photoId, {
@@ -923,6 +932,8 @@ function SceneContent() {
             uploadError: e?.message ?? "upload failed",
           })
           showError(e?.message ?? "Upload failed")
+        } finally {
+          setReplacingIndex(null)
         }
       }
       reader.readAsDataURL(file)
@@ -932,7 +943,74 @@ function SceneContent() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     e.target.value = ""
-    addFiles(files)
+    if (files.length > 0) {
+      if (replacingIndex !== null) {
+        handleReplaceFile(replacingIndex, files[0])
+      } else {
+        addFiles(files)
+      }
+    }
+  }
+
+  const handleReplaceFile = async (index: number, file: File) => {
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+      const photoId = createPhotoId()
+      const newPhoto: UploadedPhoto = {
+        id: photoId,
+        file,
+        preview: reader.result as string,
+        status: "uploading",
+        imageUrl: null,
+        results: [],
+      }
+
+      setPhotos((prev) => {
+        const next = [...prev]
+        if (index < next.length) {
+          next[index] = newPhoto
+        } else {
+          // If index is beyond current length, just push or fill gaps
+          next[index] = newPhoto
+        }
+        return next
+      })
+
+      try {
+        const { imageUrl, category, visualStrategy, brightness, people, tilt } = await uploadToR2({ file, sessionId, photoId })
+        const previewUrl = imageUrl.includes('r2.dev')
+          ? `/api/thumbnail?url=${encodeURIComponent(imageUrl)}`
+          : imageUrl
+
+        setPhotos((currentPhotos) => {
+          const idx = currentPhotos.findIndex(p => p.id === photoId)
+          if (idx === -1) return currentPhotos
+          const updated = [...currentPhotos]
+          updated[idx] = {
+            ...updated[idx],
+            status: "uploaded",
+            imageUrl,
+            preview: previewUrl,
+            category: category || updated[idx].category,
+            visualStrategy,
+            brightness,
+            people,
+            tilt,
+            uploadError: undefined
+          }
+          return updated
+        })
+      } catch (e: any) {
+        updatePhoto(photoId, {
+          status: "error",
+          uploadError: e?.message ?? "upload failed",
+        })
+        showError(e?.message ?? "Upload failed")
+      } finally {
+        setReplacingIndex(null)
+      }
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -1293,7 +1371,7 @@ function SceneContent() {
                       title="Download"
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                     </button>
                   )}
@@ -1319,54 +1397,74 @@ function SceneContent() {
 
               {/* LEFT: Image Picker & Main Thumb */}
               <div className="flex items-center gap-2">
-                <div className={`relative w-14 h-14 rounded-2xl overflow-hidden bg-white/5 border ${activePhoto?.preview ? 'border-[#d4ff00] shadow-[0_0_15px_rgba(212,255,0,0.3)]' : 'border-white/10'} group transition-all shrink-0`}>
-                  {activePhoto?.preview ? (
+                <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/5 border border-white/10 group cursor-pointer"
+                  onClick={() => {
+                    setReplacingIndex(0)
+                    fileInputRef.current?.click()
+                  }}
+                >
+                  {activePhoto ? (
                     <>
-                      <img
-                        src={activePhoto.preview}
-                        className="w-full h-full object-cover"
-                        alt="Input"
-                      />
+                      <img src={activePhoto.preview} className="w-full h-full object-cover" alt="Main" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <span className="text-[8px] font-bold uppercase tracking-tighter bg-black/60 px-2 py-1 rounded">Replace</span>
+                      </div>
                       <div className="absolute top-1 left-1 z-10 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded tracking-tighter border border-white/10 uppercase">Main</div>
                       <button
-                        onClick={() => handleDeletePhoto(activePhoto.id)}
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeletePhoto(activePhoto.id)
+                        }}
+                        className="absolute bottom-1 right-1 w-5 h-5 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity hover:bg-red-500/80"
                       >
-                        <span className="text-xl">×</span>
+                        <span className="text-xs">×</span>
                       </button>
                     </>
                   ) : (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full h-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
-                    >
+                    <div className="w-full h-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors">
                       <span className="text-2xl font-light">+</span>
-                    </button>
+                    </div>
                   )}
                 </div>
 
                 {/* Inspiration Slots (Small) */}
                 <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
-                  {photos.slice(1).map((photo, idx) => (
-                    <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
-                      <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[7px] font-bold px-1 rounded tracking-tighter border border-white/10 uppercase">Ref {idx + 1}</div>
-                      <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
-                      <button
-                        onClick={() => handleDeletePhoto(photo.id)}
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-xs"
+                  {[1, 2, 3].map((slotIdx) => {
+                    const photo = photos[slotIdx]
+                    return (
+                      <div
+                        key={slotIdx}
+                        className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group cursor-pointer"
+                        onClick={() => {
+                          setReplacingIndex(slotIdx)
+                          fileInputRef.current?.click()
+                        }}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  {photos.length > 0 && photos.length < MAX_UPLOADS && (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-10 h-10 rounded-xl border border-dashed border-white/10 flex items-center justify-center text-neutral-600 hover:text-neutral-400 hover:border-white/20 transition-all"
-                    >
-                      <span className="text-sm">+</span>
-                    </button>
-                  )}
+                        {photo ? (
+                          <>
+                            <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <span className="text-[6px] font-bold uppercase tracking-tighter bg-black/60 px-1 py-0.5 rounded">Change</span>
+                            </div>
+                            <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[7px] font-bold px-1 rounded tracking-tighter border border-white/10 uppercase">Ref {slotIdx}</div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeletePhoto(photo.id)
+                              }}
+                              className="absolute bottom-0.5 right-0.5 w-4 h-4 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity hover:bg-red-500/80"
+                            >
+                              <span className="text-[10px]">×</span>
+                            </button>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-neutral-600 hover:text-neutral-400">
+                            <span className="text-sm">+</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -1376,7 +1474,7 @@ function SceneContent() {
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   placeholder="e.g. Minimalist japandi bedroom..."
-                  className="w-full h-14 md:h-14 p-4 pr-16 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#d4ff00]/40 focus:ring-1 focus:ring-[#d4ff00]/20 transition-all resize-none shadow-inner no-scrollbar"
+                  className="w-full h-32 md:h-32 p-4 pr-16 text-sm font-light bg-neutral-900/50 border border-white/5 rounded-2xl focus:outline-none focus:border-[#d4ff00]/40 focus:ring-1 focus:ring-[#d4ff00]/20 transition-all resize-none shadow-inner no-scrollbar"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                   <button
