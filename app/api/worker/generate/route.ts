@@ -190,18 +190,20 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
         const isTimeout = e.message?.includes("aborted") || e.message?.includes("timeout") || e.message?.includes("AbortError")
+        const isRetryable = e.message?.includes("429") || e.message?.includes("exhausted") || e.message?.includes("rate limit")
 
         await adminClient
             .from('jobs')
             .update({
-                status: 'failed',
+                status: isRetryable ? 'retrying' : 'failed',
                 error: e.message,
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,
                     final_prompt: enhancementPrompt,
                     error_at: new Date().toISOString(),
-                    terminal_failure: isTimeout
+                    terminal_failure: isTimeout,
+                    is_retryable: isRetryable
                 }
             })
             .eq('id', jobId)

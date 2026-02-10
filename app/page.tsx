@@ -1247,7 +1247,7 @@ function SceneContent() {
                       <div className="w-8 h-8 rounded-full border-2 border-[#d4ff00]/30 border-t-[#d4ff00] animate-spin mb-4" />
                     )}
                     <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${res.status === "error" || res.status === "failed" ? "text-red-500" : "text-[#d4ff00]"}`}>
-                      {res.status === "error" || res.status === "failed" ? "Failed" : "Processing"}
+                      {res.status === "error" || res.status === "failed" ? "Failed" : (res.status === "retrying" ? "Retrying" : "Processing")}
                     </span>
                     {res.currentStep && (
                       <span className="text-[8px] text-neutral-500 mt-2 uppercase tracking-widest">{res.currentStep}</span>
