@@ -1349,7 +1349,7 @@ function SceneContent() {
                 <div className="flex gap-1.5 px-1 border-l border-white/5 ml-1">
                   {photos.slice(1).map((photo, idx) => (
                     <div key={photo.id} className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 group">
-                      <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[8px] font-bold px-1 rounded tracking-tighter border border-white/10">{String.fromCharCode(65 + idx)}</div>
+                      <div className="absolute top-0.5 left-0.5 z-10 bg-black/60 text-white text-[7px] font-bold px-1 rounded tracking-tighter border border-white/10 uppercase">Ref {idx + 1}</div>
                       <img src={photo.preview} className="w-full h-full object-cover opacity-60" alt="Ref" />
                       <button
                         onClick={() => handleDeletePhoto(photo.id)}
@@ -1428,13 +1428,22 @@ function SceneContent() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4">
+                {photos.length > 1 && (
+                  <button
+                    onClick={resetReferences}
+                    className="text-[9px] font-bold text-[#d4ff00]/60 hover:text-[#d4ff00] transition-colors uppercase tracking-[0.2em] flex items-center gap-1.5"
+                  >
+                    <span className="w-1 h-1 bg-[#d4ff00] rounded-full animate-pulse" />
+                    Clear Refs
+                  </button>
+                )}
                 {photos.length > 0 && (
                   <button
                     onClick={clearAll}
                     className="text-[9px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-[0.2em]"
                   >
-                    Reset
+                    Reset All
                   </button>
                 )}
               </div>

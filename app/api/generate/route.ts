@@ -185,7 +185,17 @@ export async function POST(req: Request) {
 
     const defaultStrength = 0.45
 
-    // 1. Create Job in Supabase
+    // 1. Prepare Metadata & Create Job in Supabase
+    const protocol = req.headers.get("x-forwarded-proto") || "https"
+    const forwardedHost = req.headers.get("x-forwarded-host")
+    const host = req.headers.get("host")
+    const hostToUse = forwardedHost || host
+
+    const PRODUCTION_URL = "https://kxolab.kenxxxooo.com"
+    const isLocalDev = process.env.NODE_ENV === "development"
+    const baseUrl = (isLocalDev && host) ? `${protocol}://${hostToUse}` : (process.env.APP_URL || PRODUCTION_URL)
+    const workerUrl = `${baseUrl.replace(/\/$/, "")}/api/worker/generate`
+    const isPreview = process.env.VERCEL_ENV === "preview" || (host?.includes("vercel.app") && !host?.includes("navy-xi-16"))
 
     const { data: job, error: jobError } = await adminClient
       .from('jobs')
@@ -194,45 +204,8 @@ export async function POST(req: Request) {
         input_url: imageUrl,
         prompt: basePrompt,
         category: body.category || 'other',
-        user_id: userId, // Track user who started the job (or fallback)
+        user_id: userId,
         started_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single()
-
-    if (jobError || !job) throw new Error(`Failed to create job: ${jobError?.message || "Unknown error"}`)
-    const jobId = job.id
-
-    // 1.1 Save worker metadata for debugging
-    const protocol = req.headers.get("x-forwarded-proto") || "https"
-    const forwardedHost = req.headers.get("x-forwarded-host")
-    const host = req.headers.get("host")
-    const hostToUse = forwardedHost || host
-
-    const PRODUCTION_URL = "https://kxolab.kenxxxooo.com"
-    // Safety check: use current host in dev, APP_URL in prod
-    const isLocalDev = process.env.NODE_ENV === "development"
-    const baseUrl = (isLocalDev && host) ? `${protocol}://${hostToUse}` : (process.env.APP_URL || PRODUCTION_URL)
-    const workerUrl = `${baseUrl.replace(/\/$/, "")}/api/worker/generate`
-
-    console.log(`[Generate API] Constructing worker URL:`, {
-      protocol,
-      forwardedHost,
-      host,
-      hostToUse,
-      baseUrl,
-      workerUrl
-    })
-
-    const isPreview = process.env.VERCEL_ENV === "preview" || (host?.includes("vercel.app") && !host?.includes("navy-xi-16"))
-
-    if (isPreview && !process.env.APP_URL) {
-      console.warn(`[Generate API] WARNING: This is a preview deployment and APP_URL is not set. QStash will likely fail to reach the worker due to Vercel's deployment protection (401 Unauthorized). Please set APP_URL to your production URL.`)
-    }
-
-    await adminClient
-      .from('jobs')
-      .update({
         execution_metadata: {
           queued_at: new Date().toISOString(),
           idempotency_key: idempotencyKey,
@@ -241,10 +214,22 @@ export async function POST(req: Request) {
           host_header: host,
           app_url_env: process.env.APP_URL ? "set" : "missing",
           is_preview: isPreview,
-          seed // Save seed for debugging and worker access
+          seed,
+          strength: body.strength,
+          resolution: body.resolution,
+          aspectRatio: body.aspectRatio,
+          reference_image_urls: body.referenceImageUrls
         }
       })
-      .eq('id', jobId)
+      .select('id')
+      .single()
+
+    if (jobError || !job) throw new Error(`Failed to create job: ${jobError?.message || "Unknown error"}`)
+    const jobId = job.id
+
+    if (isPreview && !process.env.APP_URL) {
+      console.warn(`[Generate API] WARNING: This is a preview deployment and APP_URL is not set. QStash will likely fail to reach the worker due to Vercel's deployment protection (401 Unauthorized). Please set APP_URL to your production URL.`)
+    }
 
     // 2. Trigger Background Task
     try {

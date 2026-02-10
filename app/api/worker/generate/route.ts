@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { jobId, sessionId, imageUrl } = body
     let currentMetadata: any = {}
+    let enhancementPrompt = ""
 
     try {
         if (!jobId) throw new Error("Missing jobId")
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
 
         // --- ENHANCEMENT ---
         await updateProgress("generating")
-        const enhancementPrompt = body.body?.prompt || "Standard professional portrait"
+        enhancementPrompt = body.body?.prompt || "Standard professional portrait"
 
         console.log(`[Worker Job ${jobId}] Calling nanoBananaGenerate with seed: ${currentMetadata.seed}...`)
         const enhancementRes = await nanoBananaGenerate({
@@ -141,6 +142,7 @@ export async function POST(req: NextRequest) {
                         execution_metadata: {
                             ...currentMetadata,
                             completed: true,
+                            final_prompt: enhancementPrompt,
                             thumbnail_url: uploadRes.publicUrl,
                             finished_at: new Date().toISOString()
                         }
@@ -197,6 +199,7 @@ export async function POST(req: NextRequest) {
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,
+                    final_prompt: enhancementPrompt,
                     error_at: new Date().toISOString(),
                     terminal_failure: isTimeout
                 }
