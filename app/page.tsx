@@ -1312,8 +1312,8 @@ function SceneContent() {
           </div>
         </div>
 
-        {/* ACTION BAR: Now sticky at the top */}
-        <div className="sticky top-0 z-50 w-full bg-neutral-950/80 backdrop-blur-xl border-b border-white/5 py-4 px-4 shadow-xl">
+        {/* ACTION BAR: Now fixed at the bottom */}
+        <div className="fixed bottom-0 left-0 z-50 w-full bg-neutral-950/80 backdrop-blur-xl border-t border-white/5 py-6 px-4 shadow-2xl">
           <div className="max-w-5xl mx-auto flex flex-col items-center gap-4">
             <div className="w-full flex flex-col md:flex-row items-center gap-3">
 
