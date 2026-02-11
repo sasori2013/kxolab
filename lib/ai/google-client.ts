@@ -217,8 +217,8 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             contents: [{ role: "user", parts }],
             generationConfig: {
                 temperature: args.temperature || 0.7,
-                maxOutputTokens: 2048,
-                seed: args.seed !== undefined ? Math.floor(Number(args.seed)) : undefined
+                maxOutputTokens: 2048
+                // Seed removed to avoid "Seed is not supported when watermark is enabled" 400 error
             }
         }
     }
