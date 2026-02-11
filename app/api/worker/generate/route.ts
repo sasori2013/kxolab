@@ -207,8 +207,12 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
         const isTimeout = e.message?.includes("aborted") || e.message?.includes("timeout") || e.message?.includes("AbortError")
-        const isRetryable = e.message?.includes("429") || e.message?.includes("exhausted") || e.message?.includes("rate limit")
+        // For 429/quota errors, we want to capture the detailed body if possible.
+        const is429 = /429|resource exhausted|rate limit|quota/i.test(e.message)
+        const isRetryable = is429 || /503|502|504|timeout|limit/i.test(e.message)
         const isDev = process.env.NODE_ENV === 'development'
+
+        console.error(`[Worker] Generation failed for job ${jobId}. Error: ${e.message}`)
 
         await adminClient
             .from('jobs')
@@ -216,7 +220,7 @@ export async function POST(req: NextRequest) {
                 // In local dev, there is no background retry mechanism (QStash), 
                 // so we set to failed to avoid UI hang unless it's a transient 5xx
                 status: (isRetryable && !isDev) ? 'retrying' : 'failed',
-                error: (isRetryable && isDev) ? `AI Quota Reached (Local Dev). Please try again in 1-2 minutes.` : e.message,
+                error: (isRetryable && isDev) ? `AI Quota Reached (Local Dev): ${e.message}` : e.message,
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,

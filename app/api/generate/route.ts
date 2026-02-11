@@ -135,14 +135,8 @@ export async function POST(req: Request) {
 
     console.log(`[Generate API] Request from ${userId ? "user: " + userId : "anonymous guest"}`)
 
-    // --- RATE LIMITING (Anonymous) ---
-    // For now, we allow unrestricted anonymous access.
-    // In production, we might add IP-based limiting here.
-
     // 0.5 IDEMPOTENCY & CACHE CHECK
     const idempotencyKey = safeString(body.idempotencyKey)
-
-    // Generate a random seed if not provided (Gemini/Imagen uint32 range)
     const seed = body.seed !== undefined ? Number(body.seed) : Math.floor(Math.random() * 2147483647)
 
     const contentHash = crypto.createHash("sha256")
@@ -192,15 +186,8 @@ export async function POST(req: Request) {
       })
     }
 
-    // DYNAMIC PROMPT CONSTRUCTION
-    // Use the prompt builder to maintain consistency with the worker
-    const basePrompt = body.prompt || ""
-
-    console.log(`[Generate API] Base Prompt for Job: ${basePrompt}`)
-
-    const defaultStrength = 0.45
-
     // 1. Prepare Metadata & Create Job in Supabase
+    const basePrompt = body.prompt || ""
     const protocol = req.headers.get("x-forwarded-proto") || "https"
     const forwardedHost = req.headers.get("x-forwarded-host")
     const host = req.headers.get("host")
@@ -212,6 +199,7 @@ export async function POST(req: Request) {
     const workerUrl = `${baseUrl.replace(/\/$/, "")}/api/worker/generate`
     const isPreview = process.env.VERCEL_ENV === "preview" || (host?.includes("vercel.app") && !host?.includes("navy-xi-16"))
 
+    console.log(`[Generate API] Creating job in Supabase...`)
     const { data: job, error: jobError } = await adminClient
       .from('jobs')
       .insert({
@@ -239,76 +227,42 @@ export async function POST(req: Request) {
       .select('id')
       .single()
 
-    if (jobError || !job) throw new Error(`Failed to create job: ${jobError?.message || "Unknown error"}`)
-    const jobId = job.id
-
-    if (isPreview && !process.env.APP_URL) {
-      console.warn(`[Generate API] WARNING: This is a preview deployment and APP_URL is not set. QStash will likely fail to reach the worker due to Vercel's deployment protection (401 Unauthorized). Please set APP_URL to your production URL.`)
+    if (jobError || !job) {
+      console.error(`[Generate API] Failed to create job:`, jobError)
+      throw new Error(`Failed to create job: ${jobError?.message || "Unknown error"}`)
     }
+    const jobId = job.id
+    console.log(`[Generate API] Job created: ${jobId}`)
 
     // 2. Trigger Background Task
     try {
-      const isLocalDev = process.env.NODE_ENV === "development"
-      const payload = {
-        jobId,
-        sessionId,
-        imageUrl,
-        referenceImageUrls: body.referenceImageUrls,
-        body,
-        userId
-      }
+      const payload = { jobId, sessionId, imageUrl, referenceImageUrls: body.referenceImageUrls, body, userId }
 
       if (isLocalDev) {
-        console.log(`[Generate API] LOCAL DEV DETECTED. Bypassing QStash and calling worker directly: ${workerUrl}`)
-
-        // Fire and forget fetch for local dev
-        // We don't await this to keep the API response fast
+        console.log(`[Generate API] LOCAL DEV: Triggering worker at ${workerUrl}`)
+        // Remove the direct nanoBananaGenerate call that was causing a "double-hit" on quotas.
+        // The worker will handle the generation and status updates.
         fetch(workerUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-bypass-qstash": "true" // Custom header to signal bypass
-          },
+          headers: { "Content-Type": "application/json", "x-bypass-qstash": "true" },
           body: JSON.stringify(payload)
         }).catch(err => {
-          console.error("[Generate API] LOCAL DEV Bypass fetch failed:", err)
+          console.error("[Generate API] LOCAL DEV fetch to worker failed:", err)
         })
-
       } else {
-        if (!process.env.QSTASH_TOKEN) {
-          throw new Error("CRITICAL: QSTASH_TOKEN is missing in environment.")
-        }
+        if (!process.env.QSTASH_TOKEN) throw new Error("QSTASH_TOKEN missing")
         const { qstashClient } = await import("@/lib/qstash")
-
-        console.log(`[Generate API] Queuing job ${jobId} to: ${workerUrl}`)
-
-        await qstashClient.publishJSON({
-          url: workerUrl,
-          concurrency: 1, // Sequential processing to respect Vertex AI rate limits (especially for Gemini-3 Pro)
-          body: payload,
-        })
-
-        console.log(`[Generate API] Job ${jobId} successfully queued via QStash`)
+        await qstashClient.publishJSON({ url: workerUrl, concurrency: 1, body: payload })
       }
     } catch (e: any) {
-      console.error("[Generate API] Task Trigger ERROR:", e)
-      // If trigger fails, the job will stay in 'processing' forever unless we mark it failed
-      await adminClient
-        .from('jobs')
-        .update({ status: 'failed', error: `Trigger failed: ${e.message}` })
-        .eq('id', jobId)
+      console.error("[Generate API] Trigger ERROR:", e)
+      await adminClient.from('jobs').update({ status: 'failed', error: `Trigger failed: ${e.message}` }).eq('id', jobId)
     }
 
-    // 3. Return Job ID Immediately
-    return NextResponse.json({
-      ok: true,
-      jobId,
-      sessionId,
-    })
+    return NextResponse.json({ ok: true, jobId, sessionId })
 
   } catch (e: any) {
     console.error(">>> [API] Generate API Error:", e)
-    console.error(">>> [API] Stack Trace:", e.stack)
-    return NextResponse.json({ ok: false, error: e?.message ?? "generate failed", stack: e.stack }, { status: 500 })
+    return NextResponse.json({ ok: false, error: e?.message ?? "generate failed" }, { status: 500 })
   }
 }

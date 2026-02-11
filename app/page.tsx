@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation"
 
 // Multi-slot implementation
 type SlotStatus = "idle" | "queued" | "generating" | "done" | "error" | "failed" | "retrying" | "processing"
-type PhotoStatus = "ready" | "uploading" | "uploaded" | "error" | "failed" | "generating" | "done"
+type PhotoStatus = "ready" | "uploading" | "uploaded" | "error" | "failed" | "generating" | "done" | "processing"
 
 interface OutputSlot {
   id: string // Unique ID for key
@@ -233,7 +233,8 @@ function ResultGallery({
                     </span>
                     {res.status === 'retrying' || res.isCoolingDown ? (
                       <span className="text-amber-500 text-[11px] font-medium leading-relaxed">
-                        Vertex AI rate limit reached. Waiting for availability...<br />
+                        Google 1-minute limit reached.<br />
+                        Waiting for availability (Safe Retry Mode)...<br />
                         <span className="text-[10px] opacity-70">(Attempt #{res.retryCount || 1})</span>
                       </span>
                     ) : (
@@ -476,9 +477,9 @@ function SceneContent() {
     setIsGenerating(false)
     setPhotos(prev => prev.map(p => ({
       ...p,
-      status: p.status === "generating" ? "uploaded" as const : p.status,
-      results: p.results.map(r => (r.status === "generating" || r.status === "queued" || r.status === "retrying")
-        ? { ...r, status: "idle" as const } : r
+      status: (p.status === "generating" || p.status === "processing") ? "uploaded" as const : p.status,
+      results: p.results.map(r => (r.status === "generating" || r.status === "queued" || r.status === "retrying" || r.status === "processing")
+        ? { ...r, status: "failed" as const, error: "Force Unlocked" } : r
       )
     })))
     clearError()
