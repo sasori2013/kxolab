@@ -1,3 +1,4 @@
+/** DEPLOYMENT_REFRESH: 2026-02-11T23:15:00Z **/
 import { GoogleAuth } from "google-auth-library"
 
 export interface NanoBananaGenerateArgs {
