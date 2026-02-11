@@ -194,7 +194,7 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
             }]
             payload.parameters.guidanceScale = args.strength && args.strength > 0.7 ? 90 : (args.strength ? (args.strength * 60) : 30)
         }
-        if (args.seed !== undefined) payload.parameters.seed = Math.floor(Number(args.seed))
+        // Seed removed to avoid "Seed is not supported when watermark is enabled" across all Imagen variants
     } else {
         // Modern generateContent structure (Gemini & Imagen 3)
         const parts: any[] = []
@@ -276,7 +276,7 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
     let foundB64: string | undefined
     let foundMime: string = "image/png"
 
-    if (isImagen) {
+    if (!useGenerateContent) {
         if (json.predictions && json.predictions[0]?.bytesBase64Encoded) {
             foundB64 = json.predictions[0].bytesBase64Encoded
             foundMime = json.predictions[0].mimeType || "image/png"
