@@ -163,13 +163,21 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         }
     }
 
-    const method = isImagen ? "predict" : "generateContent"
-    const apiVersion = model.includes("gemini-3") ? "v1beta1" : (isImagen ? "v1" : "v1beta1")
+    const isImagenClassic = model.startsWith("imagegeneration")
+    const isImagen3 = model.startsWith("imagen-3.0")
+    const isGeminiImage = model.includes("gemini-3")
+
+    // Modern Imagen 3 and Gemini models use generateContent
+    const useGenerateContent = isImagen3 || isGeminiImage
+    const method = useGenerateContent ? "generateContent" : "predict"
+    const apiVersion = useGenerateContent ? "v1beta1" : "v1"
+
     const hostname = effectiveLocation === "global" ? "aiplatform.googleapis.com" : `${effectiveLocation}-aiplatform.googleapis.com`
     const endpoint = `https://${hostname}/${apiVersion}/projects/${projectId}/locations/${effectiveLocation}/publishers/google/models/${model}:${method}`
 
     let payload: any = {}
-    if (isImagen) {
+    if (!useGenerateContent) {
+        // Legacy Imagen structure
         payload = {
             instances: [{ prompt: args.prompt.trim() }],
             parameters: { sampleCount: 1, aspectRatio: targetRatio }
@@ -188,15 +196,16 @@ export async function internalNanoBananaGenerate(args: NanoBananaGenerateArgs): 
         }
         if (args.seed !== undefined) payload.parameters.seed = Math.floor(Number(args.seed))
     } else {
+        // Modern generateContent structure (Gemini & Imagen 3)
         const parts: any[] = []
         if (imgB64) {
             parts.push({
-                text: `TASK: Use IMAGE 1 (MAIN) as the absolute foundation. Subtly incorporate elements/style from REFERENCE IMAGES.\nPROMPT: ${args.prompt.trim()}`
+                text: `TASK: Use IMAGE 1 (MAIN) as the foundation. Synthesis elements from the prompt: ${args.prompt.trim()}`
             })
             parts.push({ text: "IMAGE 1 (MAIN):" })
             parts.push({ inlineData: { mimeType: "image/jpeg", data: imgB64 } })
         } else {
-            parts.push({ text: `TASK: Create an image based on: ${args.prompt.trim()}` })
+            parts.push({ text: args.prompt.trim() })
         }
         if (referenceImageParts.length > 0) {
             referenceImageParts.forEach((refPart, i) => {
