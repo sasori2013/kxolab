@@ -1286,7 +1286,7 @@ function SceneContent() {
           <div className="max-w-7xl mx-auto mb-10 flex justify-between items-center px-4">
             <div className="flex items-center gap-3">
               <h2 className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/40">Inspiration & History</h2>
-              <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.3</span>
+              <span className="text-[8px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">System Ver 2.5.4</span>
             </div>
             {history.length > 0 && (
               <button
