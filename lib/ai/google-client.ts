@@ -45,7 +45,7 @@ async function ensureJpeg(buffer: Buffer): Promise<Buffer> {
 const VERCEL_DEADLINE_MS = 290000 // 290s
 
 async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, initialDelay?: number, startTime: number }): Promise<T> {
-    const maxTries = options.maxTries || 10
+    const maxTries = options.maxTries || 5
     let delay = options.initialDelay || 3000
     const startTime = options.startTime
 
@@ -60,10 +60,10 @@ async function withRetry<T>(fn: () => Promise<T>, options: { maxTries?: number, 
             const isRetryable = is429 || /limit|503|502|server error/i.test(msg)
 
             if (i === 0 && is429 && !options.initialDelay) {
-                // If it's a 429 (Resource Exhausted), we wait 15 seconds.
+                // If it's a 429 (Resource Exhausted), we wait 65 seconds.
                 // Since the limit is often 1 RPM (request per minute), 
-                // waiting 15s + exponential backoff is much more likely to succeed.
-                delay = 15000
+                // waiting 65s + exponential backoff is much more likely to succeed.
+                delay = 65000
             }
 
             const tooCloseToDeadline = elapsed + (delay * 1.5) > VERCEL_DEADLINE_MS

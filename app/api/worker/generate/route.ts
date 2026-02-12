@@ -207,7 +207,6 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
         console.error(`[Worker Job ${jobId}] Pipeline Error:`, e)
         const isTimeout = e.message?.includes("aborted") || e.message?.includes("timeout") || e.message?.includes("AbortError")
-        // For 429/quota errors, we want to capture the detailed body if possible.
         const is429 = /429|resource exhausted|rate limit|quota/i.test(e.message)
         const isRetryable = is429 || /503|502|504|timeout|limit/i.test(e.message)
         const isDev = process.env.NODE_ENV === 'development'
@@ -217,10 +216,8 @@ export async function POST(req: NextRequest) {
         await adminClient
             .from('jobs')
             .update({
-                // In local dev, there is no background retry mechanism (QStash), 
-                // so we set to failed to avoid UI hang unless it's a transient 5xx
-                status: (isRetryable && !isDev) ? 'retrying' : 'failed',
-                error: (isRetryable && isDev) ? `AI Quota Reached (Local Dev): ${e.message}` : e.message,
+                status: 'failed', // Always set to failed to stop loops, even if retryable
+                error: e.message,
                 updated_at: new Date().toISOString(),
                 execution_metadata: {
                     ...currentMetadata,
@@ -228,16 +225,17 @@ export async function POST(req: NextRequest) {
                     error_at: new Date().toISOString(),
                     terminal_failure: isTimeout,
                     is_retryable: isRetryable,
-                    is_dev_fail: isDev && isRetryable
+                    is_dev_fail: isDev && isRetryable,
+                    stopped_retry_to_break_loop: isRetryable
                 }
             })
             .eq('id', jobId)
 
-        // If it was a timeout or abort, don't trigger QStash retry (return 200)
-        // because retrying a 5-minute timeout will likely just time out again.
-        if (isTimeout) {
-            console.warn(`[Worker Job ${jobId}] Terminal error (timeout/abort). Returning 200 to stop QStash retries.`)
-            return NextResponse.json({ ok: false, error: e.message })
+        // For retryable errors (429, 503, timeouts), we return 200 to QStash
+        // to prevent it from retrying the request and causing a loop.
+        if (isRetryable || isTimeout) {
+            console.warn(`[Worker Job ${jobId}] Returning 200 to QStash to prevent retry loop for error: ${e.message}`)
+            return NextResponse.json({ ok: false, error: e.message, loop_prevention: true })
         }
 
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
